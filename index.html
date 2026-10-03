@@ -373,9 +373,10 @@
     position: absolute; border: 1.5px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
     cursor: move; line-height: normal;
   }
-  .photo-crop::after {
-    content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px;
-    border: 1.5px solid var(--accent); border-radius: 50%; pointer-events: none;
+  .photo-crop { pointer-events: none; }
+  .focus-dot {
+    position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%;
+    border: 2px solid #fff; box-shadow: 0 0 0 1.5px var(--accent), 0 1px 4px rgba(0,0,0,0.5); pointer-events: none;
   }
   .editor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
   .editor-controls .zoom-group { flex: 1 1 220px; }
@@ -411,6 +412,12 @@
     .recent li { grid-template-columns: 72px minmax(0, 1fr); }
     .recent img { width: 72px; }
     .recent .r-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  }
+
+  /* iPhone zooms the page when a field under 16px gets focus, and on double-tap; neither helps here. */
+  button, select, .slide-thumb { touch-action: manipulation; }
+  @media (pointer: coarse) {
+    input[type="text"], select, .text-input { font-size: 16px; }
   }
 
   .hidden { display: none !important; }
@@ -501,7 +508,7 @@
     <div class="photo-drop" id="photoDrop" tabindex="0" role="button" aria-label="Add photos">
       <div class="drop-copy">
         <p class="big">Drop photos here, or click to add them</p>
-        <p class="small mono">JPG · PNG · WebP — add a label to each, click a photo to reframe it</p>
+        <p class="small mono">JPG · PNG · WebP — add a label to each, tap a photo to choose its focal point</p>
       </div>
     </div>
     <div class="tools hidden" id="showControls">
@@ -652,6 +659,7 @@
   var video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
+  video.setAttribute("playsinline", "");
   video.preload = "auto";
 
   /* ---------- state ---------- */
@@ -811,13 +819,6 @@
     var sy = Math.min(Math.max(c.cy * ih - ch / 2, 0), ih - ch);
     return { sx: sx, sy: sy, sw: cw, sh: ch };
   }
-  // Pull the focal point back inside the reachable range, so dragging past an edge doesn't build up slack.
-  function clampFocus(s) {
-    var iw = s.bitmap.width, ih = s.bitmap.height, r = photoCrop(iw, ih, s.crop);
-    s.crop.cx = (r.sx + r.sw / 2) / iw;
-    s.crop.cy = (r.sy + r.sh / 2) / ih;
-    return r;
-  }
   function drawPhoto(ctx, img, c, W, H) {
     var r = photoCrop(img.width, img.height, c);
     ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
@@ -901,10 +902,14 @@
     label.className = "label-preview";
     label.textContent = s.label.trim();
     box.appendChild(label);
-    stage.appendChild(img); stage.appendChild(box);
+    var dot = document.createElement("div");
+    dot.className = "focus-dot";
+    stage.appendChild(img); stage.appendChild(box); stage.appendChild(dot);
 
     function place() {
-      var iw = s.bitmap.width, ih = s.bitmap.height, r = clampFocus(s);
+      var iw = s.bitmap.width, ih = s.bitmap.height, r = photoCrop(iw, ih, s.crop);
+      dot.style.left = (s.crop.cx * 100) + "%";
+      dot.style.top = (s.crop.cy * 100) + "%";
       box.style.left = (r.sx / iw * 100) + "%";
       box.style.top = (r.sy / ih * 100) + "%";
       box.style.width = (r.sw / iw * 100) + "%";
@@ -912,26 +917,23 @@
       onChange();
     }
 
-    var drag = null;
-    stage.addEventListener("pointerdown", function (e) {
+    // The focal point is wherever you tap; drag to slide it. The frame centres on it as far as the photo's edges allow.
+    var drag = false;
+    function focusAt(e) {
       var rect = stage.getBoundingClientRect();
-      if (e.target !== box) { // jump: centre the window on the click
-        s.crop.cx = (e.clientX - rect.left) / rect.width;
-        s.crop.cy = (e.clientY - rect.top) / rect.height;
-        place();
-      }
-      drag = { px: e.clientX, py: e.clientY, cx: s.crop.cx, cy: s.crop.cy, w: rect.width, h: rect.height };
+      s.crop.cx = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+      s.crop.cy = Math.min(Math.max((e.clientY - rect.top) / rect.height, 0), 1);
+      place();
+    }
+    stage.addEventListener("pointerdown", function (e) {
+      drag = true;
       stage.setPointerCapture(e.pointerId);
+      focusAt(e);
       e.preventDefault();
     });
-    stage.addEventListener("pointermove", function (e) {
-      if (!drag) return;
-      s.crop.cx = drag.cx + (e.clientX - drag.px) / drag.w;
-      s.crop.cy = drag.cy + (e.clientY - drag.py) / drag.h;
-      place();
-    });
-    stage.addEventListener("pointerup", function () { drag = null; });
-    stage.addEventListener("pointercancel", function () { drag = null; });
+    stage.addEventListener("pointermove", function (e) { if (drag) focusAt(e); });
+    stage.addEventListener("pointerup", function () { drag = false; });
+    stage.addEventListener("pointercancel", function () { drag = false; });
 
     var controls = document.createElement("div");
     controls.className = "editor-controls";
@@ -967,7 +969,7 @@
     var hint = document.createElement("p");
     hint.className = "hint";
     hint.style.margin = "0";
-    hint.textContent = "Click the part of the photo that matters, or drag the box. The box is exactly what appears in the slideshow; zoom in to frame a detail.";
+    hint.textContent = "Tap the part of the photo that matters; the frame centres on it as far as the edges allow. Drag to fine-tune, zoom in to frame a detail.";
 
     el.appendChild(stage); el.appendChild(controls); el.appendChild(hint);
     if (img.complete) place(); else img.addEventListener("load", place);
@@ -1154,6 +1156,17 @@
     fitCropToAspect(true);
     updateClipUI();
     renderExport();
+    primeFirstFrame();
+  }
+
+  // iPhone Safari doesn't decode a frame until playback starts, so the stage stays black (and the first
+  // captured frame can be black too). A muted play-and-pause makes it show the first frame.
+  function primeFirstFrame() {
+    setTimeout(function () {
+      if (video.readyState >= 2 || !video.paused) return;
+      var p = video.play();
+      if (p && p.then) p.then(function () { video.pause(); video.currentTime = clipStart; }).catch(function () {});
+    }, 250);
   }
 
   video.addEventListener("loadeddata", function () { positionCropOverlay(); });
@@ -2014,22 +2027,29 @@
   }
 
   // Ask this browser to actually decode the first frame.
+  // Resolves "yes" once a frame decodes, "no" on a decode error, "unknown" if the browser won't say in
+  // time. Some browsers (iPhone Safari) load nothing until playback starts, so this plays it, muted.
   function probePlayback(url) {
     return new Promise(function (resolve) {
       var v = document.createElement("video"), to = null;
       function done(res) {
         clearTimeout(to);
-        v.onloadeddata = v.onerror = null;
+        v.onloadeddata = v.onplaying = v.onerror = null;
+        v.pause();
         v.removeAttribute("src");
         v.load();
         resolve(res);
       }
       v.muted = true;
+      v.playsInline = true;
+      v.setAttribute("playsinline", "");
       v.preload = "auto";
-      v.onloadeddata = function () { done({ w: v.videoWidth, h: v.videoHeight }); };
-      v.onerror = function () { done(null); };
-      to = setTimeout(function () { done(null); }, 5000);
+      v.onloadeddata = v.onplaying = function () { if (v.videoWidth) done("yes"); };
+      v.onerror = function () { done("no"); };
+      to = setTimeout(function () { done(v.error ? "no" : "unknown"); }, 6000);
       v.src = url;
+      var p = v.play();
+      if (p && p.catch) p.catch(function () { /* autoplay refused: wait for loadeddata or the timeout */ });
     });
   }
 
@@ -2047,7 +2067,8 @@
       { label: "Frame rate", target: MP4_FPS + " fps", value: fps.toFixed(1) + " fps", ok: Math.abs(fps - MP4_FPS) < 0.1 },
       { label: "File size", target: "under 5 MB", value: mb(u8.length) + " MB", ok: u8.length < SPEC.maxBytes },
       { label: "Fast start", target: "index before data", value: info.valid ? info.top.join(" → ") : "unreadable", ok: info.valid && info.top.indexOf("moov") >= 0 && info.top.indexOf("moov") < info.top.indexOf("mdat") },
-      { label: "Plays here", target: "decodes in this browser", value: played ? "yes" : "no", ok: !!played }
+      { label: "Plays here", target: "decodes in this browser", ok: played !== "no",
+        value: played === "yes" ? "yes" : played === "no" ? "no" : "not confirmed — check the preview plays" }
     ];
     var ok = checks.every(function (c) { return c.ok; });
     var onlySizeFails = !checks[3].ok && checks.every(function (c, i) { return i === 3 || c.ok; });
