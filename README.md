@@ -5,12 +5,15 @@ Turn a 5-second stretch of video, or a set of photos, into a looping MP4 or GIF 
 ## Modes
 
 **Video clip.** Pick 5 s, frame it (locked to 440:248), add an optional label, export.
-- MP4 (default where supported): H.264, 30 fps, 440×248 or 880×496 (2×), Compact / Balanced / High. Captured in one real-time playthrough, so export takes about 5 s.
-- GIF: 20 fps, then 12 fps, then stepped compression until it fits under 5 MB.
+- **Export MP4** (main button): H.264, 30 fps, constant quality, so calm footage comes out tiny and busy footage gets the bits it needs. Made at 880×496 (2×) when the framed area has the detail for it, otherwise 440×248. Captured in one real-time playthrough, so export takes about 5 s.
+- **GIF** (secondary button, for places that only take GIF): 440×248, 20 fps, then 12 fps, then stepped compression until it fits under 5 MB.
+- Shortcuts: Space play/pause, S start the clip at the playhead, P preview.
 
 **Photo slideshow.** Add up to 30 photos, give each a label, reorder, choose seconds per photo and cut or crossfade. Exports a seamless looping MP4 (the last photo fades back into the first). Click a photo to set its crop: click or drag to choose the focal point, zoom up to 300% to frame a detail. Export re-reads each original at full resolution, so zoomed crops stay sharp.
 
-**Labels.** Credit or location text burned into the frames, in any corner. The on-screen previews use the same geometry as the export.
+**Labels.** Credit or location text burned into the frames, in any corner, for clips (MP4 and GIF) and slideshows. The on-screen previews use the same geometry as the export.
+
+There are no quality or size settings: every export is made as small as it can be at a consistently clean quality, then checked. If a very busy clip would go over 5 MB, quality is eased a step automatically.
 
 **Recent downloads.** Each file you download is kept in this browser (IndexedDB) so it can be downloaded again: last 12, up to 60 MB. Nothing leaves the device.
 

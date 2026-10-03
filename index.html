@@ -110,12 +110,6 @@
   }
   .theme-toggle:hover { color: var(--text); border-color: var(--accent); }
 
-  .spec-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
-  .spec {
-    border: 1px solid var(--border); background: var(--surface);
-    border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-muted);
-  }
-  .spec b { color: var(--text); font-weight: 500; }
 
   section { margin-bottom: 34px; }
   h2 {
@@ -229,19 +223,28 @@
   .msg.warn { background: var(--accent-soft); color: var(--text); border: 1px solid var(--border); }
   .msg.err { border: 1px solid var(--danger); color: var(--text); }
 
-  /* ---------- framing ---------- */
-  .crop-controls {
-    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-    border: 1px solid var(--border); border-radius: 6px;
-    background: var(--surface); padding: 14px 16px;
+  /* ---------- framing, label and slideshow tools ---------- */
+  .tools {
+    border: 1px solid var(--border); border-top: none; border-radius: 0 0 6px 6px;
+    background: var(--surface); padding: 12px 14px 14px; display: grid; gap: 12px;
   }
+  #showControls { border-top: 1px solid var(--border); border-radius: 6px; margin-top: 12px; }
+  #frameSection { border-top: 1px dashed var(--border); border-radius: 0 0 6px 6px; margin-top: -1px; }
+  .transport { border-radius: 0; }
+  .transport.solo { border-radius: 0 0 6px 6px; }
+  .tool-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; }
+  .tools .hint { margin: 0 2px; }
   .crop-label { color: var(--text-muted); font-size: 11.5px; }
   .zoom-group { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 200px; }
   .zoom-group input[type="range"] { flex: 1; }
   .zoom-value { color: var(--text); min-width: 40px; text-align: right; font-size: 12px; }
+  .pos-select { flex: 0 0 auto; }
 
   /* ---------- export ---------- */
-  .generate-row { display: flex; align-items: center; gap: 14px; }
+  .generate-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .generate-row .progress-track { flex: 1 1 160px; }
+  #exportBtn { padding: 10px 18px; font-size: 14px; }
+  .export-info { font-size: 12px; color: var(--text-muted); margin: 2px 2px 0; }
   .progress-track {
     flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2);
     overflow: hidden; visibility: hidden;
@@ -249,11 +252,6 @@
   .progress-track.show { visibility: visible; }
   .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
   .progress-label { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
-  .option-row {
-    display: flex; align-items: center; gap: 8px;
-    margin-top: 14px; font-size: 13px; cursor: pointer;
-  }
-  .option-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
 
   /* ---------- result ---------- */
   .result-shell {
@@ -274,6 +272,16 @@
   .checklist .val { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
   .checklist li.bad .val { color: var(--danger); }
   .result-note { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; }
+  .verdict { margin: 0 0 6px; font-size: 14px; font-weight: 500; }
+  .verdict .mark { font-family: "IBM Plex Mono", monospace; margin-right: 6px; }
+  .verdict.ok .mark { color: var(--success); }
+  .verdict.bad .mark { color: var(--danger); }
+  .verdict .facts { display: block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 400; color: var(--text-muted); margin-top: 2px; }
+  .result-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  #downloadHint { margin: 6px 2px 0; }
+  .checks { margin-top: 14px; font-size: 12.5px; }
+  .checks summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
+  .checks .checklist { margin-top: 10px; }
 
   .download-btn {
     display: inline-flex; align-items: center; gap: 8px;
@@ -284,27 +292,14 @@
   .download-btn:hover:not(:disabled) { filter: brightness(1.08); color: var(--accent-contrast); }
 
   /* ---------- format + MP4 options ---------- */
-  .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-bottom: 16px; }
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); padding: 2px; }
-  .seg button { border: none; background: transparent; border-radius: 999px; padding: 5px 14px; font-size: 12px; font-family: inherit; }
-  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-contrast); }
-  .seg button[aria-pressed="true"]:hover:not(:disabled) { color: var(--accent-contrast); }
   .opt { display: flex; align-items: center; gap: 8px; }
   select {
     font-size: 12px; color: var(--text); background: var(--surface);
     border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; max-width: 100%;
   }
   select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .fmt-gif .mp4-only, .fmt-mp4 .gif-only, body.mode-show .clip-only { display: none !important; }
 
-  .embed { margin-top: 16px; }
-  .embed-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-  .embed-head button { padding: 4px 10px; font-size: 12px; }
-  .embed pre {
-    margin: 0; padding: 10px 12px; font-size: 11.5px; line-height: 1.5;
-    background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
-    white-space: pre-wrap; word-break: break-all; color: var(--text);
-  }
+
 
   /* ---------- modes ---------- */
   .modes { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
@@ -350,7 +345,8 @@
   .photo-drop.drag-over { border-color: var(--accent); background: var(--accent-soft); }
   .photo-drop.compact { padding: 12px; }
   .photo-drop.compact .small { display: none; }
-  .slides { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+  .slides { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .slides:not(:empty) + .photo-drop { margin-top: 10px; }
   .slide {
     display: grid; grid-template-columns: 30px 176px minmax(0, 1fr) auto; gap: 12px; align-items: center;
     border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 10px 12px;
@@ -431,7 +427,7 @@
   <header>
     <div>
       <div class="brand"><span class="brand-mark"></span>LOUPE</div>
-      <p class="tagline">Turn a 5-second stretch of video, or a set of photos, into a looping MP4 or GIF that already meets the spec.</p>
+      <p class="tagline">Turn 5 seconds of video, or a set of photos, into a small looping MP4 that already meets the spec.</p>
     </div>
     <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
   </header>
@@ -440,8 +436,6 @@
     <button type="button" role="tab" id="modeClip" aria-selected="true" aria-controls="clipMode">Video clip</button>
     <button type="button" role="tab" id="modeShow" aria-selected="false" aria-controls="showMode">Photo slideshow</button>
   </nav>
-
-  <div class="spec-strip mono" id="specStrip" aria-label="Export specs"></div>
 
   <input type="file" id="fileInput" accept="video/*" class="hidden">
   <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
@@ -458,133 +452,111 @@
     <div class="transport hidden" id="transport">
       <div class="scrub-row">
         <div class="scrub-track">
-          <input type="range" id="scrub" min="0" max="0" value="0" step="0.001">
+          <input type="range" id="scrub" min="0" max="0" value="0" step="0.001" aria-label="Playhead">
           <div class="clip-range" id="clipRange"></div>
         </div>
         <div class="time-readout mono"><span class="current" id="curTime">0:00.0</span> / <span id="durTime">0:00.0</span></div>
       </div>
       <div class="transport-actions">
-        <button class="icon-btn" id="playBtn" type="button" title="Play / pause">▶</button>
-        <button class="primary" id="setStartBtn" type="button">Start clip here</button>
-        <button id="previewBtn" type="button">Preview 5 s</button>
+        <button class="icon-btn" id="playBtn" type="button" title="Play / pause (Space)">▶</button>
+        <button class="primary" id="setStartBtn" type="button" title="Start the 5 s clip at the playhead (S)">Start clip here</button>
+        <button id="previewBtn" type="button" title="Play the 5 s clip (P)">Preview</button>
         <button class="ghost" id="changeBtn" type="button">Change video</button>
         <div class="marks mono" id="clipLabel">clip 0:00.0 → 0:05.0</div>
       </div>
       <div class="msg warn" id="transportMsg"></div>
       <div class="msg err" id="lengthWarn"></div>
     </div>
-  </section>
 
-  <section id="frameSection" class="hidden">
-    <h2>Frame it</h2>
-    <div class="crop-controls">
-      <div class="zoom-group">
-        <span class="crop-label mono">Zoom</span>
-        <input type="range" id="zoomInput" min="100" max="400" value="100" step="5">
-        <span class="zoom-value mono" id="zoomValue">100%</span>
+    <div class="tools hidden" id="frameSection">
+      <div class="tool-row">
+        <input type="text" class="text-input" id="labelInput" maxlength="120" placeholder="Label — credit or location, e.g. Paris, 1 May · Photo: Reuters" aria-label="Label">
+        <select id="labelPosInput" class="mono pos-select" aria-label="Label position">
+          <option value="bl" selected>↙ Bottom left</option>
+          <option value="br">↘ Bottom right</option>
+          <option value="tl">↖ Top left</option>
+          <option value="tr">↗ Top right</option>
+        </select>
       </div>
-      <button class="ghost" id="resetFrameBtn" type="button">Reset framing</button>
+      <div class="tool-row">
+        <div class="zoom-group">
+          <span class="crop-label mono">Zoom</span>
+          <input type="range" id="zoomInput" min="100" max="400" value="100" step="5" aria-label="Zoom">
+          <span class="zoom-value mono" id="zoomValue">100%</span>
+        </div>
+        <button class="ghost" id="resetFrameBtn" type="button">Reset framing</button>
+      </div>
+      <p class="hint">Drag the box to reframe; the corner handle resizes it. Zoom in to clear black bars on vertical video. What's inside the box, label included, is exactly what you'll get.</p>
     </div>
-    <p class="hint">The amber box is locked to 440:248 (about 16:9), so nothing gets stretched. Drag it to reposition, drag the handle to resize. On a vertical clip with black bars down the sides, push <strong>Zoom</strong> up until the dashed inner line clears them — that line is exactly what ends up in the export.</p>
   </section>
   </div>
 
   <div id="showMode" role="tabpanel" aria-labelledby="modeShow" class="hidden">
   <section>
-    <h2>Photos</h2>
+    <ul class="slides" id="slideList"></ul>
     <div class="photo-drop" id="photoDrop" tabindex="0" role="button" aria-label="Add photos">
       <div class="drop-copy">
         <p class="big">Drop photos here, or click to add them</p>
-        <p class="small mono">JPG · PNG · WebP — click a photo to choose what stays in frame. Location and camera data are not carried into the export.</p>
+        <p class="small mono">JPG · PNG · WebP — add a label to each, click a photo to reframe it</p>
       </div>
     </div>
-    <ul class="slides" id="slideList"></ul>
-    <div class="panel" id="showControls" style="margin-top:14px;">
-      <label class="opt"><span class="crop-label mono">Each photo</span>
-        <select id="secsInput" class="mono">
-          <option value="1.5">1.5 s</option>
-          <option value="2">2 s</option>
-          <option value="2.5" selected>2.5 s</option>
-          <option value="3">3 s</option>
-          <option value="4">4 s</option>
-          <option value="5">5 s</option>
-        </select>
-      </label>
-      <label class="opt"><span class="crop-label mono">Transition</span>
-        <select id="transInput" class="mono">
-          <option value="fade" selected>Crossfade</option>
-          <option value="cut">Cut</option>
-        </select>
-      </label>
-      <span class="show-summary mono" id="showSummary"></span>
+    <div class="tools hidden" id="showControls">
+      <div class="tool-row">
+        <label class="opt"><span class="crop-label mono">Each photo</span>
+          <select id="secsInput" class="mono">
+            <option value="1.5">1.5 s</option>
+            <option value="2">2 s</option>
+            <option value="2.5" selected>2.5 s</option>
+            <option value="3">3 s</option>
+            <option value="4">4 s</option>
+            <option value="5">5 s</option>
+          </select>
+        </label>
+        <label class="opt"><span class="crop-label mono">Transition</span>
+          <select id="transInput" class="mono">
+            <option value="fade" selected>Crossfade</option>
+            <option value="cut">Cut</option>
+          </select>
+        </label>
+        <label class="opt"><span class="crop-label mono">Labels</span>
+          <select id="showPosInput" class="mono pos-select" aria-label="Label position">
+            <option value="bl" selected>↙ Bottom left</option>
+            <option value="br">↘ Bottom right</option>
+            <option value="tl">↖ Top left</option>
+            <option value="tr">↗ Top right</option>
+          </select>
+        </label>
+      </div>
     </div>
   </section>
   </div>
 
-  <section id="labelSection" class="hidden">
-    <h2>Label</h2>
-    <div class="panel">
-      <input type="text" class="text-input clip-only" id="labelInput" maxlength="120" placeholder="Credit or location, e.g. Paris, 1 May · Photo: Reuters" aria-label="Label text">
-      <label class="opt"><span class="crop-label mono">Position</span>
-        <select id="labelPosInput" class="mono">
-          <option value="bl" selected>Bottom left</option>
-          <option value="br">Bottom right</option>
-          <option value="tl">Top left</option>
-          <option value="tr">Top right</option>
-        </select>
-      </label>
-    </div>
-    <p class="hint" id="labelHint">Burned into every frame of the export. Leave it empty for no label. The preview on the video shows exactly where it lands.</p>
-  </section>
-
   <section id="exportSection" class="hidden">
-    <h2>Export</h2>
-    <div class="opts">
-      <div class="seg mono" role="group" aria-label="Format">
-        <button type="button" id="fmtMp4" aria-pressed="true">MP4</button>
-        <button type="button" id="fmtGif" aria-pressed="false">GIF</button>
-      </div>
-      <label class="opt mp4-only"><span class="crop-label mono">Size</span>
-        <select id="sizeInput" class="mono">
-          <option value="2" selected>880 × 496 (2×, sharp on retina)</option>
-          <option value="1">440 × 248 (1×)</option>
-        </select>
-      </label>
-      <label class="opt mp4-only"><span class="crop-label mono">Quality</span>
-        <select id="qualityInput" class="mono">
-          <option value="compact">Compact</option>
-          <option value="balanced" selected>Balanced</option>
-          <option value="high">High</option>
-        </select>
-      </label>
-    </div>
     <div class="generate-row">
       <button class="primary" id="exportBtn" type="button">Export MP4</button>
+      <button class="ghost" id="gifBtn" type="button" title="For places that only accept GIF: 440 × 248, 20 fps (12 if needed), compressed until it fits under 5 MB">GIF</button>
       <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     </div>
     <div class="progress-label mono" id="progressLabel"></div>
-    <p class="hint mp4-only" id="mp4Hint"></p>
-    <label class="option-row gif-only">
-      <input type="checkbox" id="autoCompressInput" checked>
-      <span>Auto-compress if the file is still over 5 MB at 12 fps</span>
-    </label>
-    <p class="hint gif-only">Exports try 20 fps first, then 12 fps. If it's still over 5 MB, the footage is compressed in steps — Light, Medium, Strong, Heavy, Maximum — stopping at the lightest step that fits. Compression is lossy (fewer colors, and pixels that barely changed are reused from the previous frame), but size, duration and frame rate never change. Every result is checked against the spec before download is offered.</p>
+    <p class="export-info mono" id="exportInfo"></p>
   </section>
 
   <section id="resultSection" class="hidden">
-    <h2>Result</h2>
     <div class="result-shell">
-      <img id="resultImg" alt="Generated GIF preview">
+      <img id="resultImg" alt="Exported GIF">
       <video id="resultVideo" class="hidden" muted loop autoplay playsinline></video>
       <div class="result-meta">
-        <ul class="checklist" id="checklist"></ul>
+        <p class="verdict" id="verdict"></p>
         <div class="result-note" id="resultNote"></div>
-        <button class="download-btn mono" id="downloadBtn" type="button">Download GIF ↓</button>
-        <div class="hint" id="downloadHint" style="margin-top:8px;"></div>
-        <div class="embed hidden" id="embedBox">
-          <div class="embed-head"><span class="crop-label mono">Embed — loops like a GIF, loads like a video</span><button class="ghost" id="copyEmbedBtn" type="button">Copy</button></div>
-          <pre class="mono" id="embedCode"></pre>
+        <div class="result-actions">
+          <button class="download-btn mono" id="downloadBtn" type="button">Download ↓</button>
+          <button class="ghost hidden" id="copyEmbedBtn" type="button" title="HTML for an autoplaying, looping, muted video">Copy embed code</button>
         </div>
+        <div class="hint" id="downloadHint"></div>
+        <details class="checks" id="checksBox">
+          <summary class="mono">Spec checks</summary>
+          <ul class="checklist" id="checklist"></ul>
+        </details>
       </div>
     </div>
   </section>
@@ -658,17 +630,15 @@
   var playBtn = $("playBtn"), setStartBtn = $("setStartBtn"), previewBtn = $("previewBtn"), changeBtn = $("changeBtn");
   var transportMsg = $("transportMsg"), lengthWarn = $("lengthWarn");
   var frameSection = $("frameSection"), zoomInput = $("zoomInput"), zoomValueEl = $("zoomValue"), resetFrameBtn = $("resetFrameBtn");
-  var exportSection = $("exportSection"), exportBtn = $("exportBtn"), autoCompressInput = $("autoCompressInput");
+  var exportSection = $("exportSection"), exportBtn = $("exportBtn"), gifBtn = $("gifBtn"), exportInfo = $("exportInfo");
   var progressTrack = $("progressTrack"), progressFill = $("progressFill"), progressLabel = $("progressLabel");
   var resultSection = $("resultSection"), resultImg = $("resultImg"), checklistEl = $("checklist");
   var resultNote = $("resultNote"), downloadBtn = $("downloadBtn"), downloadHint = $("downloadHint");
-  var specStrip = $("specStrip"), fmtMp4Btn = $("fmtMp4"), fmtGifBtn = $("fmtGif");
-  var sizeInput = $("sizeInput"), qualityInput = $("qualityInput"), mp4Hint = $("mp4Hint");
-  var resultVideo = $("resultVideo"), embedBox = $("embedBox"), embedCode = $("embedCode"), copyEmbedBtn = $("copyEmbedBtn");
+  var resultVideo = $("resultVideo"), copyEmbedBtn = $("copyEmbedBtn"), verdictEl = $("verdict"), checksBox = $("checksBox");
   var modeClipBtn = $("modeClip"), modeShowBtn = $("modeShow"), clipModeEl = $("clipMode"), showModeEl = $("showMode");
-  var labelSection = $("labelSection"), labelInput = $("labelInput"), labelPosInput = $("labelPosInput"), labelHint = $("labelHint");
+  var labelInput = $("labelInput"), labelPosInput = $("labelPosInput"), showPosInput = $("showPosInput");
   var photoInput = $("photoInput"), photoDrop = $("photoDrop"), slideList = $("slideList");
-  var secsInput = $("secsInput"), transInput = $("transInput"), showSummary = $("showSummary");
+  var secsInput = $("secsInput"), transInput = $("transInput"), showControls = $("showControls");
   var recentSection = $("recentSection"), recentList = $("recentList"), clearRecentBtn = $("clearRecentBtn");
 
   var video = document.createElement("video");
@@ -683,82 +653,67 @@
   var busy = false;
   var previewing = false;
   var currentVideoURL = null;
-  var lastResultURL = null, lastResultBlob = null, lastFilename = "loupe.gif", lastMeta = null, lastSavedBlob = null;
+  var lastResultURL = null, lastResultBlob = null, lastFilename = "loupe.gif", lastMeta = null, lastSavedBlob = null, lastEmbed = "";
   var appMode = "clip";          // "clip": 5 s from a video · "show": photos into a looping slideshow
   var slides = [];               // { id, name, url, bitmap, label }
   var labelPos = "bl";
   var playerWrap = null, cropBoxEl = null, cropDimsEl = null, cropHandleEl = null, cropZoomGuideEl = null, cropLabelEl = null;
 
-  /* ---------- format: MP4 (default where WebCodecs exists) or GIF ---------- */
+  /* ---------- export settings: chosen automatically, never asked ---------- */
   var MP4_FPS = 30;
-  // Bits per pixel per frame. H.264 at these rates is typically 5-20x smaller than the GIF of the same clip.
-  var MP4_QUALITY = { compact: 0.05, balanced: 0.09, high: 0.15 };
+  // Constant quality: every frame gets the same visual quality, so calm footage comes out tiny and busy
+  // footage gets the bits it needs. QP is H.264's 0-51 scale (lower = better); 23 is visually clean.
+  var MP4_QP = 23;
+  var MP4_FALLBACK_BPP = 0.12; // bits per pixel per frame, for encoders without constant-quality mode
   var mp4Supported = typeof VideoEncoder === "function" && typeof VideoFrame === "function";
-  var format = mp4Supported ? "mp4" : "gif";
 
-  function mp4Dims() { var k = sizeInput.value === "2" ? 2 : 1; return { w: SPEC.w * k, h: SPEC.h * k, scale: k }; }
-  function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_QUALITY[qualityInput.value] * d.w * d.h * MP4_FPS)); }
+  // 2× (880 × 496) stays sharp on high-density screens. If the framed part of the video has fewer
+  // pixels than that, 1× (440 × 248) looks the same and is smaller, since upscaling only spends bytes.
+  function mp4Dims() {
+    var k = 2;
+    if (appMode === "clip" && video.videoWidth && sampleRect().sw < SPEC.w * 1.5) k = 1;
+    return { w: SPEC.w * k, h: SPEC.h * k, scale: k };
+  }
+  function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_FALLBACK_BPP * d.w * d.h * MP4_FPS)); }
 
-  function specChip(html) { return '<span class="spec">' + html + "</span>"; }
-  function effFormat() { return appMode === "show" ? "mp4" : format; }  // slideshows are MP4-only
   function showSeconds() { return slides.length * parseFloat(secsInput.value); }
-  function canExport() { return appMode === "show" ? slides.length >= 2 && mp4Supported : !!video.videoWidth && !tooShort(); }
-  function updateExportState() { exportBtn.disabled = busy || !canExport(); }
+  function clipReady() { return !!video.videoWidth && !tooShort(); }
+  function canExport() { return mp4Supported && (appMode === "show" ? slides.length >= 2 : clipReady()); }
+  function updateExportState() {
+    exportBtn.disabled = busy || !canExport();
+    gifBtn.disabled = busy || appMode !== "clip" || !clipReady();
+  }
+  function fmtSecs(x) { return (+x.toFixed(1)) + " s"; }
 
-  function renderFormat() {
-    var show = appMode === "show", f = effFormat();
+  function renderExport() {
+    var show = appMode === "show";
     document.body.classList.toggle("mode-show", show);
-    exportSection.classList.toggle("fmt-mp4", f === "mp4");
-    exportSection.classList.toggle("fmt-gif", f === "gif");
-    fmtMp4Btn.setAttribute("aria-pressed", f === "mp4");
-    fmtGifBtn.setAttribute("aria-pressed", f === "gif");
-    fmtGifBtn.disabled = busy || show;
-    fmtGifBtn.title = show ? "Slideshows export as MP4" : "";
-    if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : "Export GIF";
+    exportSection.classList.toggle("hidden", show ? slides.length === 0 : !video.videoWidth);
+    showControls.classList.toggle("hidden", slides.length === 0);
 
-    var ready = show ? slides.length > 0 : !!video.videoWidth;
-    exportSection.classList.toggle("hidden", !ready);
-    labelSection.classList.toggle("hidden", !ready);
-    labelHint.textContent = show
-      ? "Type each photo's label next to it above; leave one empty for no label. Position applies to every photo."
-      : "Burned into every frame of the export. Leave it empty for no label. The preview on the video shows exactly where it lands.";
+    // Without an H.264 encoder, GIF is the only clip export, so it takes the main button's place.
+    exportBtn.classList.toggle("hidden", !mp4Supported && !show);
+    gifBtn.classList.toggle("hidden", show);
+    gifBtn.classList.toggle("primary", !mp4Supported);
+    gifBtn.classList.toggle("ghost", mp4Supported);
+    gifBtn.textContent = mp4Supported ? "GIF" : "Export GIF";
+    if (!busy) exportBtn.textContent = "Export MP4";
 
-    var secs = show ? showSeconds() : SPEC.seconds;
-    showSummary.textContent = slides.length + (slides.length === 1 ? " photo" : " photos") + " · " + (+secs.toFixed(1)) + " s loop";
-    if (f === "mp4") {
-      var d = mp4Dims();
-      specStrip.innerHTML =
-        specChip("<b>" + d.w + " × " + d.h + "</b> px" + (d.scale > 1 ? " · shows at 440 × 248" : "")) +
-        (show ? specChip("<b>" + (+secs.toFixed(1)) + "</b> s loop") : specChip("<b>5</b> seconds")) +
-        specChip("<b>30</b> fps") + specChip("<b>under 5</b> MB") + specChip("<b>H.264</b> · fast start");
-      if (!mp4Supported) {
-        mp4Hint.textContent = show
-          ? "Slideshows export as MP4, which needs a browser that can encode H.264: a current Chrome, Edge or Safari."
-          : "MP4 needs a browser that can encode H.264: a current Chrome, Edge or Safari.";
-      } else if (show) {
-        mp4Hint.textContent = slides.length < 2
-          ? "Add at least two photos to make a slideshow."
-          : "Targets about " + mb(mp4Bitrate(d) * secs / 8) + " MB at most; still photos usually come in well under. Rendering takes a second or two. " +
-            "The loop is seamless: with crossfade on, the last photo fades back into the first.";
-      } else {
-        mp4Hint.textContent = "Targets about " + mb(mp4Bitrate(d) * SPEC.seconds / 8) + " MB. The clip plays through once in real time while it's captured, " +
-          "so export takes about 5 seconds. Silent, loops, and the index sits at the front of the file so browsers start playing before it finishes downloading.";
-      }
+    var d = mp4Dims(), size = d.w + " × " + d.h;
+    if (show) {
+      exportInfo.textContent = !mp4Supported
+        ? "Slideshows export as MP4, which needs a current Chrome, Edge or Safari."
+        : slides.length < 2
+          ? "Add at least two photos."
+          : "MP4 · " + size + " · 30 fps · " + slides.length + " photos, " + fmtSecs(showSeconds()) + " loop";
     } else {
-      specStrip.innerHTML = specChip("<b>440 × 248</b> px") + specChip("<b>5</b> seconds") +
-        specChip("<b>20</b> fps, <b>12</b> if needed") + specChip("<b>under 5</b> MB");
+      exportInfo.textContent = mp4Supported
+        ? "MP4 · " + size + " · 30 fps · 5 s · under 5 MB · takes about 5 s"
+        : "GIF · 440 × 248 · 5 s · under 5 MB. For MP4, use a current Chrome, Edge or Safari.";
     }
     updateExportState();
   }
-  fmtMp4Btn.addEventListener("click", function () { if (!busy && mp4Supported) { format = "mp4"; renderFormat(); } });
-  fmtGifBtn.addEventListener("click", function () { if (!busy && appMode === "clip") { format = "gif"; renderFormat(); } });
-  sizeInput.addEventListener("change", renderFormat);
-  qualityInput.addEventListener("change", renderFormat);
-  secsInput.addEventListener("change", renderFormat);
-  if (!mp4Supported) {
-    fmtMp4Btn.disabled = true;
-    fmtMp4Btn.title = "This browser can't encode video (no WebCodecs). Use a current Chrome, Edge, Safari or Firefox for MP4.";
-  }
+  secsInput.addEventListener("change", renderExport);
 
   /* ---------- modes ---------- */
   function setMode(m) {
@@ -770,7 +725,7 @@
     showModeEl.classList.toggle("hidden", m !== "show");
     previewing = false;
     video.pause();
-    renderFormat();
+    renderExport();
     if (m === "clip") positionCropOverlay();
   }
   modeClipBtn.addEventListener("click", function () { setMode("clip"); });
@@ -811,9 +766,16 @@
   function applyLabelPos() {
     ["bl", "br", "tl", "tr"].forEach(function (p) { document.body.classList.toggle("pos-" + p, p === labelPos); });
   }
-  labelPosInput.addEventListener("change", function () { labelPos = labelPosInput.value; applyLabelPos(); });
+  [labelPosInput, showPosInput].forEach(function (sel) {
+    sel.addEventListener("change", function () {
+      labelPos = sel.value;
+      labelPosInput.value = showPosInput.value = labelPos;
+      applyLabelPos();
+    });
+  });
   labelInput.addEventListener("input", function () { if (cropLabelEl) cropLabelEl.textContent = labelInput.value.trim(); });
   labelPos = labelPosInput.value || "bl"; // browsers can restore the select after a reload
+  showPosInput.value = labelPos;
   applyLabelPos();
 
   /* ---------- slideshow photos ---------- */
@@ -1057,7 +1019,7 @@
     });
     photoDrop.classList.toggle("compact", slides.length > 0);
     photoDrop.querySelector(".big").textContent = slides.length ? "Add more photos" : "Drop photos here, or click to add them";
-    renderFormat();
+    renderExport();
   }
 
   photoDrop.addEventListener("click", function () { if (!busy) photoInput.click(); });
@@ -1172,7 +1134,7 @@
     frameSection.classList.remove("hidden");
     fitCropToAspect(true);
     updateClipUI();
-    renderFormat();
+    renderExport();
   }
 
   video.addEventListener("loadeddata", function () { positionCropOverlay(); });
@@ -1261,6 +1223,17 @@
     updateClipUI();
   });
 
+  // Space play/pause, S start clip at the playhead, P preview — skipped while typing or exporting.
+  document.addEventListener("keydown", function (e) {
+    if (busy || appMode !== "clip" || !video.videoWidth || e.metaKey || e.ctrlKey || e.altKey) return;
+    var t = e.target, tag = t && t.tagName;
+    if (tag === "INPUT" && t.type !== "range" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
+    var k = e.key.toLowerCase();
+    if (k === " " && tag !== "BUTTON") { e.preventDefault(); playBtn.click(); }
+    else if (k === "s") { e.preventDefault(); setStartBtn.click(); }
+    else if (k === "p") { e.preventDefault(); previewBtn.click(); }
+  });
+
   previewBtn.addEventListener("click", function () {
     if (busy || tooShort()) return;
     previewing = true;
@@ -1295,6 +1268,7 @@
     cropZoomGuideEl.style.bottom = inset;
     cropZoomGuideEl.style.display = "block";
     cropZoomGuideEl.classList.toggle("zoomed", zoom > 1.001);
+    if (appMode === "clip") renderExport(); // output size follows how much detail is framed
   }
   window.addEventListener("resize", positionCropOverlay);
 
@@ -1372,14 +1346,12 @@
   /* ---------- busy state ---------- */
   function setBusy(b) {
     busy = b;
-    [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub, autoCompressInput, sizeInput, qualityInput,
-     modeClipBtn, modeShowBtn, labelInput, labelPosInput, secsInput, transInput].forEach(function (el) { el.disabled = b; });
-    fmtMp4Btn.disabled = b || !mp4Supported;
-    fmtGifBtn.disabled = b || appMode === "show";
+    [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub,
+     modeClipBtn, modeShowBtn, labelInput, labelPosInput, showPosInput, secsInput, transInput].forEach(function (el) { el.disabled = b; });
     slideList.inert = b;
     photoDrop.inert = b;
     updateExportState();
-    exportBtn.textContent = b ? "Exporting…" : (effFormat() === "mp4" ? "Export MP4" : "Export GIF");
+    if (!b) renderExport();
     if (cropBoxEl) cropBoxEl.style.pointerEvents = b ? "none" : "auto";
   }
   function setProgress(frac, label) {
@@ -1699,13 +1671,15 @@
   // High, Main, then Constrained Baseline, all level 4.0 (covers 880 × 496 at 30 fps with room to spare).
   var AVC_CODECS = ["avc1.640028", "avc1.4d0028", "avc1.42e028"];
 
-  async function pickEncoderConfig(w, h, bitrate) {
+  // rate is { qp } for constant quality or { bitrate } for variable bitrate.
+  async function pickEncoderConfig(w, h, rate) {
     for (var i = 0; i < AVC_CODECS.length; i++) {
       var cfg = {
-        codec: AVC_CODECS[i], width: w, height: h, framerate: MP4_FPS,
-        bitrate: bitrate, bitrateMode: "variable", latencyMode: "quality",
+        codec: AVC_CODECS[i], width: w, height: h, framerate: MP4_FPS, latencyMode: "quality",
         avc: { format: "avc" } // length-prefixed NALs + avcC description, which is what MP4 wants
       };
+      if (rate.qp) cfg.bitrateMode = "quantizer";
+      else { cfg.bitrateMode = "variable"; cfg.bitrate = rate.bitrate; }
       try {
         var res = await VideoEncoder.isConfigSupported(cfg);
         if (res.supported) return cfg;
@@ -1719,9 +1693,13 @@
   }
 
   // One H.264 encode session: feed it canvases in order, then finish() returns the muxed MP4 bytes.
-  async function openMp4Encoder(d, bitrate, total) {
-    var cfg = await pickEncoderConfig(d.w, d.h, bitrate);
-    if (!cfg) throw new Error("this browser can't encode H.264. Switch to GIF, or use a current Chrome, Edge or Safari.");
+  async function openMp4Encoder(d, rate, total) {
+    var cfg = await pickEncoderConfig(d.w, d.h, rate);
+    if (!cfg && rate.qp) { // constant quality isn't offered by every encoder; variable bitrate is
+      rate = { bitrate: mp4Bitrate(d) };
+      cfg = await pickEncoderConfig(d.w, d.h, rate);
+    }
+    if (!cfg) throw new Error("this browser can't encode H.264. Export a GIF instead, or use a current Chrome, Edge or Safari.");
     var samples = [], avcC = null, encErr = null, next = 0;
     var encoder = new VideoEncoder({
       output: function (chunk, meta) {
@@ -1735,11 +1713,14 @@
     encoder.configure(cfg);
     return {
       codec: cfg.codec,
+      rate: rate,
       count: function () { return next; },
       add: function (source, keyFrame) {
         if (encErr) throw encErr;
         var vf = new VideoFrame(source, { timestamp: Math.round(next * 1e6 / MP4_FPS), duration: Math.round(1e6 / MP4_FPS) });
-        encoder.encode(vf, { keyFrame: next === 0 || !!keyFrame });
+        var opts = { keyFrame: next === 0 || !!keyFrame };
+        if (rate.qp) opts.avc = { quantizer: rate.qp };
+        encoder.encode(vf, opts);
         vf.close();
         next++;
       },
@@ -1760,10 +1741,10 @@
 
   // Video clip: captures and encodes in one pass. Frames are resampled to a constant 30 fps
   // (nearest source frame), so the file is exactly 150 frames / 5.00 s whatever the source rate.
-  async function captureClipMp4(d, bitrate, prefix) {
+  async function captureClipMp4(d, rate, prefix) {
     await ensureLabelFont();
     var total = SPEC.seconds * MP4_FPS;
-    var enc = await openMp4Encoder(d, bitrate, total);
+    var enc = await openMp4Encoder(d, rate, total);
 
     var cv = document.createElement("canvas");
     cv.width = d.w;
@@ -1833,7 +1814,7 @@
       }
 
       setProgress(0.97, prefix + "finishing");
-      return { data: await enc.finish(), codec: enc.codec, thumb: thumb, seconds: SPEC.seconds };
+      return { data: await enc.finish(), codec: enc.codec, rate: enc.rate, thumb: thumb, seconds: SPEC.seconds };
     } finally {
       enc.close();
     }
@@ -1841,7 +1822,7 @@
 
   // Slideshow: every photo is pre-rendered with its label, then held (or crossfaded) frame by frame.
   // The last photo fades back into the first, so the loop has no seam.
-  async function renderSlideshowMp4(d, bitrate, prefix) {
+  async function renderSlideshowMp4(d, rate, prefix) {
     await ensureLabelFont();
     var n = slides.length, per = Math.round(parseFloat(secsInput.value) * MP4_FPS);
     var fadeF = transInput.value === "fade" ? Math.min(Math.round(0.5 * MP4_FPS), Math.floor(per / 3)) : 0;
@@ -1867,7 +1848,7 @@
     }
     var mix = canvas();
 
-    var enc = await openMp4Encoder(d, bitrate, total);
+    var enc = await openMp4Encoder(d, rate, total);
     try {
       for (var i = 0; i < total; i++) {
         var si = Math.floor(i / per), local = i - si * per, into = local - (per - fadeF);
@@ -1888,7 +1869,7 @@
         }
       }
       setProgress(0.97, prefix + "finishing");
-      return { data: await enc.finish(), codec: enc.codec, thumb: makeThumb(cards[0]), seconds: total / MP4_FPS };
+      return { data: await enc.finish(), codec: enc.codec, rate: enc.rate, thumb: makeThumb(cards[0]), seconds: total / MP4_FPS };
     } finally {
       enc.close();
     }
@@ -2067,24 +2048,27 @@
     hideResult();
     setBusy(true);
     try {
-      var d = mp4Dims(), bitrate = mp4Bitrate(d), report = null, bytes = 0;
-      // Variable bitrate rarely overshoots by much, but if a busy clip lands over 5 MB, retarget and redo.
+      var d = mp4Dims(), rate = { qp: MP4_QP }, report = null, bytes = 0;
+      // Rarely needed: if a very busy stretch lands over 5 MB, ease quality a step and redo.
       for (var attempt = 0; attempt < 3; attempt++) {
-        var prefix = attempt === 0 ? (show ? "Slideshow · " : "MP4 · ") : "came to " + mb(bytes) + " MB — redoing at a lower bitrate · ";
-        var enc = show ? await renderSlideshowMp4(d, bitrate, prefix) : await captureClipMp4(d, bitrate, prefix);
+        var prefix = attempt === 0 ? (show ? "Slideshow · " : "Recording · ") : "came to " + mb(bytes) + " MB — easing quality to fit · ";
+        var enc = show ? await renderSlideshowMp4(d, rate, prefix) : await captureClipMp4(d, rate, prefix);
         bytes = enc.data.length;
-        setProgress(0.99, prefix + "verifying");
+        setProgress(0.99, prefix + "checking");
         report = await buildMp4Report(enc.data, d, enc.seconds);
         if (report.ok) {
           var secs = +enc.seconds.toFixed(1);
           var name = show
             ? "loupe-slideshow-" + slides.length + "photos-" + d.w + "x" + d.h + "-" + stamp() + ".mp4"
             : "loupe-clip-" + d.w + "x" + d.h + "-" + stamp() + ".mp4";
+          var notes = [];
+          if (show) notes.push(slides.length + " photos, " + secsInput.value + " s each" + (transInput.value === "fade" ? ", crossfaded" : "") + ".");
+          notes.push(d.scale > 1
+            ? "Made at 2× so it stays sharp on high-density screens; embed it at 440 × 248."
+            : "Made at 440 × 248: the framed area doesn't have the detail for 2×, so extra pixels would only add size.");
+          if (attempt) notes.push("Quality was eased slightly to fit under 5 MB.");
           showSuccess(
-            new Blob([enc.data], { type: "video/mp4" }), report, name,
-            "H.264 (" + enc.codec + "), " + Math.round(enc.seconds * MP4_FPS) + " frames at " + MP4_FPS + " fps, no audio. " +
-            (show ? slides.length + " photos, " + secsInput.value + " s each" + (transInput.value === "fade" ? " with crossfades" : "") + ". " : "") +
-            (attempt ? "Bitrate was lowered to fit under 5 MB. " : "") + "Every spec checked against the finished file.",
+            new Blob([enc.data], { type: "video/mp4" }), report, name, notes.join(" "),
             '<video src="' + name + '" width="' + SPEC.w + '" height="' + SPEC.h + '"\n  autoplay loop muted playsinline preload="auto"></video>',
             { detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · MP4 · " + d.w + "×" + d.h + " · " + secs + " s", thumb: enc.thumb }
           );
@@ -2094,10 +2078,12 @@
           showFailure(report, "This export didn't meet the spec, so no download is offered.");
           return;
         }
-        bitrate = Math.floor(bitrate * (SPEC.maxBytes * 0.85) / bytes);
+        rate = enc.rate.qp
+          ? { qp: enc.rate.qp + 5 }
+          : { bitrate: Math.floor(enc.rate.bitrate * (SPEC.maxBytes * 0.85) / bytes) };
       }
-      showFailure(report, "Even at a reduced bitrate this comes to " + mb(bytes) + " MB, over the 5 MB limit. Try Compact quality or 1× size" +
-        (show ? ", or fewer photos." : ", or a calmer 5 seconds."));
+      showFailure(report, "Even with quality eased this comes to " + mb(bytes) + " MB, over the 5 MB limit. " +
+        (show ? "Try fewer photos or shorter timings." : "Try a calmer 5 seconds — fast motion, shake and grain are hardest to squeeze."));
     } catch (err) {
       showFailure(null, "Something went wrong while exporting: " + (err && err.message ? err.message : err));
     } finally {
@@ -2106,15 +2092,19 @@
       progressFill.style.width = "0%";
       progressLabel.textContent = "";
       updateClipUI();
-      renderFormat();
+      renderExport();
     }
   }
 
   copyEmbedBtn.addEventListener("click", function () {
-    var text = embedCode.textContent;
+    var text = lastEmbed;
     var p = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject();
-    p.then(function () { copyEmbedBtn.textContent = "Copied"; }, function () { copyEmbedBtn.textContent = "Select & copy"; });
-    setTimeout(function () { copyEmbedBtn.textContent = "Copy"; }, 1800);
+    p.then(function () {
+      copyEmbedBtn.textContent = "Copied";
+      setTimeout(function () { copyEmbedBtn.textContent = "Copy embed code"; }, 1800);
+    }, function () {
+      downloadHint.textContent = text; // clipboard blocked: show it so it can be selected by hand
+    });
   });
 
   /* ---------- verification: read the finished file back and measure it ---------- */
@@ -2188,6 +2178,25 @@
 
   function mb(bytes) { return (bytes / 1e6).toFixed(2); }
 
+  // One line when everything passes; the full checklist opens only when something doesn't.
+  function renderVerdict(report) {
+    verdictEl.innerHTML = "";
+    checksBox.classList.toggle("hidden", !report);
+    if (!report) { checklistEl.innerHTML = ""; verdictEl.className = "verdict bad"; verdictEl.textContent = "Export failed"; return; }
+    renderChecklist(report);
+    checksBox.open = !report.ok;
+    verdictEl.className = "verdict " + (report.ok ? "ok" : "bad");
+    var mark = document.createElement("span");
+    mark.className = "mark";
+    mark.textContent = report.ok ? "✓" : "✗";
+    var facts = document.createElement("span");
+    facts.className = "facts";
+    facts.textContent = report.checks.slice(0, 4).map(function (c) { return c.value; }).join(" · ");
+    verdictEl.appendChild(mark);
+    verdictEl.appendChild(document.createTextNode(report.ok ? "Meets the spec" : "Doesn't meet the spec"));
+    verdictEl.appendChild(facts);
+  }
+
   function showSuccess(blob, report, filename, note, embed, meta) {
     if (lastResultURL) URL.revokeObjectURL(lastResultURL);
     lastResultBlob = blob;
@@ -2200,9 +2209,9 @@
     if (isVideo) { resultImg.removeAttribute("src"); resultVideo.src = lastResultURL; resultVideo.play().catch(function () {}); }
     else { resultVideo.removeAttribute("src"); resultVideo.load(); resultImg.src = lastResultURL; }
     downloadBtn.textContent = isVideo ? "Download MP4 ↓" : "Download GIF ↓";
-    embedBox.classList.toggle("hidden", !embed);
-    embedCode.textContent = embed || "";
-    renderChecklist(report);
+    lastEmbed = embed || "";
+    copyEmbedBtn.classList.toggle("hidden", !embed);
+    renderVerdict(report);
     resultNote.textContent = note;
     downloadBtn.classList.remove("hidden");
     downloadHint.textContent = "";
@@ -2216,17 +2225,17 @@
     resultImg.classList.add("hidden");
     resultVideo.classList.add("hidden");
     resultVideo.removeAttribute("src");
-    embedBox.classList.add("hidden");
+    copyEmbedBtn.classList.add("hidden");
     downloadBtn.classList.add("hidden");
     downloadHint.textContent = "";
-    if (report) renderChecklist(report); else checklistEl.innerHTML = "";
+    renderVerdict(report);
     resultNote.textContent = text;
     resultSection.classList.remove("hidden");
     resultSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }
 
   /* ---------- the export run ---------- */
-  function runExport() { return effFormat() === "mp4" ? runExportMp4() : runExportGif(); }
+
 
   async function runExportGif() {
     if (busy || !video.videoWidth || tooShort()) return;
@@ -2257,9 +2266,7 @@
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }),
             report, "loupe-clip-440x248-" + tier.fps + "fps-" + stamp() + ".gif",
-            ti === 0
-              ? "Exported at 20 fps, 100 frames. Every spec checked against the finished file."
-              : "The 20 fps version came to " + firstMB + " MB, over the 5 MB limit, so this is the 12 fps redo.",
+            ti === 0 ? "" : "At 20 fps it came to " + firstMB + " MB, so it was redone at 12 fps to fit under 5 MB.",
             null, { detail: "Clip · GIF · 440×248 · " + tier.fps + " fps · 5 s", thumb: captureThumb }
           );
           return;
@@ -2274,10 +2281,6 @@
       // Still over 5 MB at 12 fps. `frames` holds that 12 fps capture, so compression needs no re-capture.
       var tier12 = TIERS[TIERS.length - 1];
       var standardMB = mb(bytes);
-      if (!autoCompressInput.checked) {
-        showFailure(report, "Even at 12 fps this stretch comes to " + standardMB + " MB, over the 5 MB limit. Turn on auto-compress above, or try a calmer 5 seconds.");
-        return;
-      }
 
       for (var li = 0; li < LEVELS.length; li++) {
         var level = LEVELS[li];
@@ -2293,8 +2296,8 @@
           showSuccess(
             new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }),
             creport, "loupe-clip-440x248-" + tier12.fps + "fps-" + stamp() + ".gif",
-            "The standard 12 fps export came to " + standardMB + " MB, over the 5 MB limit, so the footage was compressed: " +
-            level.name + " (" + describeLevel(level) + "). That's the lightest step that fit.",
+            "Even at 12 fps it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
+            describeLevel(level) + "), the lightest step that fits under 5 MB.",
             null, { detail: "Clip · GIF · 440×248 · 12 fps · 5 s · " + level.name.toLowerCase() + " compression", thumb: captureThumb }
           );
           return;
@@ -2317,7 +2320,8 @@
       updateClipUI();
     }
   }
-  exportBtn.addEventListener("click", runExport);
+  exportBtn.addEventListener("click", runExportMp4);
+  gifBtn.addEventListener("click", runExportGif);
 
   /* ---------- download (published pages need the downloads capability) ---------- */
   function fallbackAnchorDownload(blob, filename) {
@@ -2461,16 +2465,13 @@
   });
   renderRecent();
 
-  renderFormat();
+  renderExport();
   // WebCodecs can exist without an H.264 encoder (some Linux builds) — find out now, not at export time.
   if (mp4Supported) {
-    pickEncoderConfig(880, 496, 1000000).then(function (cfg) {
+    pickEncoderConfig(880, 496, { bitrate: 1000000 }).then(function (cfg) {
       if (cfg) return;
       mp4Supported = false;
-      fmtMp4Btn.disabled = true;
-      fmtMp4Btn.title = "This browser has no H.264 encoder. Use a current Chrome, Edge or Safari for MP4.";
-      if (format === "mp4") format = "gif";
-      if (!busy) renderFormat();
+      if (!busy) renderExport();
     });
   }
 
