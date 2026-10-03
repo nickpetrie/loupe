@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Loupe — 5-second clips, made to spec</title>
+<title>Loupe</title>
+<!-- Everything runs locally: no requests leave the page except the two Google Fonts hosts. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src blob: data:; media-src blob:; worker-src blob:; connect-src blob:; base-uri 'none'; form-action 'none'">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -293,7 +295,7 @@
     border: 1px solid var(--border); border-radius: 4px; padding: 6px 8px; max-width: 100%;
   }
   select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  .fmt-gif .mp4-only, .fmt-mp4 .gif-only { display: none !important; }
+  .fmt-gif .mp4-only, .fmt-mp4 .gif-only, body.mode-show .clip-only { display: none !important; }
 
   .embed { margin-top: 16px; }
   .embed-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
@@ -302,6 +304,95 @@
     margin: 0; padding: 10px 12px; font-size: 11.5px; line-height: 1.5;
     background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px;
     white-space: pre-wrap; word-break: break-all; color: var(--text);
+  }
+
+  /* ---------- modes ---------- */
+  .modes { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+  .modes button {
+    border: none; border-bottom: 2px solid transparent; border-radius: 0; background: transparent;
+    padding: 10px 16px 9px; font-size: 14px; font-weight: 500; color: var(--text-muted); margin-bottom: -1px;
+  }
+  .modes button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .modes button:hover:not(:disabled) { color: var(--text); border-color: transparent; border-bottom-color: var(--border); }
+  .modes button[aria-selected="true"]:hover:not(:disabled) { border-bottom-color: var(--accent); }
+
+  /* ---------- labels: one layout, used by the canvas renderer and every on-screen preview ---------- */
+  .label-host { container-type: inline-size; }
+  .label-preview {
+    position: absolute; max-width: calc(100% - 4.55cqw);
+    font: 600 2.955cqw/1.25 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    color: #fff; background: rgba(0,0,0,0.62); padding: 0.91cqw 1.82cqw; border-radius: 0.68cqw;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+  }
+  .label-preview:empty { display: none; }
+  .pos-bl .label-preview { left: 2.27cqw; bottom: 2.27cqw; }
+  .pos-br .label-preview { right: 2.27cqw; bottom: 2.27cqw; }
+  .pos-tl .label-preview { left: 2.27cqw; top: 2.27cqw; }
+  .pos-tr .label-preview { right: 2.27cqw; top: 2.27cqw; }
+  .crop-zoom-guide.zoomed { border: 1px dashed rgba(255,255,255,0.85); }
+
+  .panel {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 14px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px;
+  }
+  .text-input {
+    flex: 1 1 260px; min-width: 0; font: inherit; font-size: 14px; color: var(--text);
+    background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px;
+  }
+  .text-input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  /* ---------- slideshow ---------- */
+  .photo-drop {
+    border: 1.5px dashed var(--border); border-radius: 6px; background: var(--surface);
+    padding: 22px; text-align: center; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .photo-drop.drag-over { border-color: var(--accent); background: var(--accent-soft); }
+  .photo-drop.compact { padding: 12px; }
+  .photo-drop.compact .small { display: none; }
+  .slides { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+  .slide {
+    display: grid; grid-template-columns: 30px 176px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 10px 12px;
+  }
+  .slide-num { font-size: 12px; color: var(--text-muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .slide-thumb {
+    position: relative; width: 176px; max-width: 100%; aspect-ratio: 440 / 248; overflow: hidden;
+    border-radius: 3px; background: #0b0a08;
+  }
+  .slide-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .slide-fields { display: grid; gap: 6px; min-width: 0; }
+  .slide-name { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slide-actions { display: flex; gap: 4px; }
+  .slide-actions button { width: 30px; padding: 6px 0; }
+  .show-summary { font-size: 12px; color: var(--text-muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+  @media (max-width: 560px) {
+    .slide { grid-template-columns: 112px minmax(0, 1fr); }
+    .slide-num { display: none; }
+    .slide-thumb { width: 112px; }
+    .slide-actions { grid-column: 1 / -1; justify-content: flex-end; }
+    .show-summary { margin-left: 0; width: 100%; }
+  }
+
+  /* ---------- recent downloads ---------- */
+  .recent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .recent-head h2 { margin: 0; }
+  .recent-head button { padding: 4px 10px; font-size: 12px; }
+  .recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .recent li {
+    display: grid; grid-template-columns: 88px minmax(0, 1fr) auto; gap: 12px; align-items: center;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 8px 10px;
+  }
+  .recent img { width: 88px; aspect-ratio: 440 / 248; object-fit: cover; border-radius: 3px; background: #0b0a08; display: block; }
+  .recent .r-name { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recent .r-meta { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .recent .r-actions { display: flex; gap: 6px; }
+  .recent .r-actions button { padding: 5px 10px; font-size: 12px; }
+  .recent-empty { font-size: 12.5px; color: var(--text-muted); margin: 0; }
+  @media (max-width: 560px) {
+    .recent li { grid-template-columns: 72px minmax(0, 1fr); }
+    .recent img { width: 72px; }
+    .recent .r-actions { grid-column: 1 / -1; justify-content: flex-end; }
   }
 
   .hidden { display: none !important; }
@@ -322,15 +413,22 @@
   <header>
     <div>
       <div class="brand"><span class="brand-mark"></span>LOUPE</div>
-      <p class="tagline">Pick a 5-second stretch of video and get an MP4 or GIF that already meets the spec.</p>
+      <p class="tagline">Turn a 5-second stretch of video, or a set of photos, into a looping MP4 or GIF that already meets the spec.</p>
     </div>
     <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
   </header>
 
+  <nav class="modes" role="tablist" aria-label="What are you making?">
+    <button type="button" role="tab" id="modeClip" aria-selected="true" aria-controls="clipMode">Video clip</button>
+    <button type="button" role="tab" id="modeShow" aria-selected="false" aria-controls="showMode">Photo slideshow</button>
+  </nav>
+
   <div class="spec-strip mono" id="specStrip" aria-label="Export specs"></div>
 
   <input type="file" id="fileInput" accept="video/*" class="hidden">
+  <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
 
+  <div id="clipMode" role="tabpanel" aria-labelledby="modeClip">
   <section>
     <div class="stage" id="dropzone">
       <div class="drop-copy">
@@ -370,6 +468,55 @@
       <button class="ghost" id="resetFrameBtn" type="button">Reset framing</button>
     </div>
     <p class="hint">The amber box is locked to 440:248 (about 16:9), so nothing gets stretched. Drag it to reposition, drag the handle to resize. On a vertical clip with black bars down the sides, push <strong>Zoom</strong> up until the dashed inner line clears them — that line is exactly what ends up in the export.</p>
+  </section>
+  </div>
+
+  <div id="showMode" role="tabpanel" aria-labelledby="modeShow" class="hidden">
+  <section>
+    <h2>Photos</h2>
+    <div class="photo-drop" id="photoDrop" tabindex="0" role="button" aria-label="Add photos">
+      <div class="drop-copy">
+        <p class="big">Drop photos here, or click to add them</p>
+        <p class="small mono">JPG · PNG · WebP — cropped to fill 440:248 from the centre. Location and camera data are not carried into the export.</p>
+      </div>
+    </div>
+    <ul class="slides" id="slideList"></ul>
+    <div class="panel" id="showControls" style="margin-top:14px;">
+      <label class="opt"><span class="crop-label mono">Each photo</span>
+        <select id="secsInput" class="mono">
+          <option value="1.5">1.5 s</option>
+          <option value="2">2 s</option>
+          <option value="2.5" selected>2.5 s</option>
+          <option value="3">3 s</option>
+          <option value="4">4 s</option>
+          <option value="5">5 s</option>
+        </select>
+      </label>
+      <label class="opt"><span class="crop-label mono">Transition</span>
+        <select id="transInput" class="mono">
+          <option value="fade" selected>Crossfade</option>
+          <option value="cut">Cut</option>
+        </select>
+      </label>
+      <span class="show-summary mono" id="showSummary"></span>
+    </div>
+  </section>
+  </div>
+
+  <section id="labelSection" class="hidden">
+    <h2>Label</h2>
+    <div class="panel">
+      <input type="text" class="text-input clip-only" id="labelInput" maxlength="120" placeholder="Credit or location, e.g. Paris, 1 May · Photo: Reuters" aria-label="Label text">
+      <label class="opt"><span class="crop-label mono">Position</span>
+        <select id="labelPosInput" class="mono">
+          <option value="bl" selected>Bottom left</option>
+          <option value="br">Bottom right</option>
+          <option value="tl">Top left</option>
+          <option value="tr">Top right</option>
+        </select>
+      </label>
+    </div>
+    <p class="hint" id="labelHint">Burned into every frame of the export. Leave it empty for no label. The preview on the video shows exactly where it lands.</p>
   </section>
 
   <section id="exportSection" class="hidden">
@@ -422,6 +569,15 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <section id="recentSection" class="hidden">
+    <div class="recent-head">
+      <h2>Recent downloads</h2>
+      <button class="ghost" id="clearRecentBtn" type="button">Clear all</button>
+    </div>
+    <ul class="recent" id="recentList"></ul>
+    <p class="hint">Kept only in this browser on this device, so you can download them again. The last 12 are kept, up to 60 MB in total.</p>
   </section>
 
   <footer>
@@ -491,6 +647,11 @@
   var specStrip = $("specStrip"), fmtMp4Btn = $("fmtMp4"), fmtGifBtn = $("fmtGif");
   var sizeInput = $("sizeInput"), qualityInput = $("qualityInput"), mp4Hint = $("mp4Hint");
   var resultVideo = $("resultVideo"), embedBox = $("embedBox"), embedCode = $("embedCode"), copyEmbedBtn = $("copyEmbedBtn");
+  var modeClipBtn = $("modeClip"), modeShowBtn = $("modeShow"), clipModeEl = $("clipMode"), showModeEl = $("showMode");
+  var labelSection = $("labelSection"), labelInput = $("labelInput"), labelPosInput = $("labelPosInput"), labelHint = $("labelHint");
+  var photoInput = $("photoInput"), photoDrop = $("photoDrop"), slideList = $("slideList");
+  var secsInput = $("secsInput"), transInput = $("transInput"), showSummary = $("showSummary");
+  var recentSection = $("recentSection"), recentList = $("recentList"), clearRecentBtn = $("clearRecentBtn");
 
   var video = document.createElement("video");
   video.muted = true;
@@ -504,8 +665,11 @@
   var busy = false;
   var previewing = false;
   var currentVideoURL = null;
-  var lastResultURL = null, lastResultBlob = null, lastFilename = "loupe.gif";
-  var playerWrap = null, cropBoxEl = null, cropDimsEl = null, cropHandleEl = null, cropZoomGuideEl = null;
+  var lastResultURL = null, lastResultBlob = null, lastFilename = "loupe.gif", lastMeta = null, lastSavedBlob = null;
+  var appMode = "clip";          // "clip": 5 s from a video · "show": photos into a looping slideshow
+  var slides = [];               // { id, name, url, bitmap, label }
+  var labelPos = "bl";
+  var playerWrap = null, cropBoxEl = null, cropDimsEl = null, cropHandleEl = null, cropZoomGuideEl = null, cropLabelEl = null;
 
   /* ---------- format: MP4 (default where WebCodecs exists) or GIF ---------- */
   var MP4_FPS = 30;
@@ -518,33 +682,240 @@
   function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_QUALITY[qualityInput.value] * d.w * d.h * MP4_FPS)); }
 
   function specChip(html) { return '<span class="spec">' + html + "</span>"; }
+  function effFormat() { return appMode === "show" ? "mp4" : format; }  // slideshows are MP4-only
+  function showSeconds() { return slides.length * parseFloat(secsInput.value); }
+  function canExport() { return appMode === "show" ? slides.length >= 2 && mp4Supported : !!video.videoWidth && !tooShort(); }
+  function updateExportState() { exportBtn.disabled = busy || !canExport(); }
+
   function renderFormat() {
-    exportSection.classList.toggle("fmt-mp4", format === "mp4");
-    exportSection.classList.toggle("fmt-gif", format === "gif");
-    fmtMp4Btn.setAttribute("aria-pressed", format === "mp4");
-    fmtGifBtn.setAttribute("aria-pressed", format === "gif");
-    if (!busy) exportBtn.textContent = format === "mp4" ? "Export MP4" : "Export GIF";
-    if (format === "mp4") {
+    var show = appMode === "show", f = effFormat();
+    document.body.classList.toggle("mode-show", show);
+    exportSection.classList.toggle("fmt-mp4", f === "mp4");
+    exportSection.classList.toggle("fmt-gif", f === "gif");
+    fmtMp4Btn.setAttribute("aria-pressed", f === "mp4");
+    fmtGifBtn.setAttribute("aria-pressed", f === "gif");
+    fmtGifBtn.disabled = busy || show;
+    fmtGifBtn.title = show ? "Slideshows export as MP4" : "";
+    if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : "Export GIF";
+
+    var ready = show ? slides.length > 0 : !!video.videoWidth;
+    exportSection.classList.toggle("hidden", !ready);
+    labelSection.classList.toggle("hidden", !ready);
+    labelHint.textContent = show
+      ? "Type each photo's label next to it above; leave one empty for no label. Position applies to every photo."
+      : "Burned into every frame of the export. Leave it empty for no label. The preview on the video shows exactly where it lands.";
+
+    var secs = show ? showSeconds() : SPEC.seconds;
+    showSummary.textContent = slides.length + (slides.length === 1 ? " photo" : " photos") + " · " + (+secs.toFixed(1)) + " s loop";
+    if (f === "mp4") {
       var d = mp4Dims();
       specStrip.innerHTML =
         specChip("<b>" + d.w + " × " + d.h + "</b> px" + (d.scale > 1 ? " · shows at 440 × 248" : "")) +
-        specChip("<b>5</b> seconds") + specChip("<b>30</b> fps") + specChip("<b>under 5</b> MB") +
-        specChip("<b>H.264</b> · fast start");
-      mp4Hint.textContent = "Targets about " + mb(mp4Bitrate(d) * SPEC.seconds / 8) + " MB. The clip plays through once in real time while it's captured, " +
-        "so export takes about 5 seconds. Silent, loops, and the index sits at the front of the file so browsers start playing before it finishes downloading.";
+        (show ? specChip("<b>" + (+secs.toFixed(1)) + "</b> s loop") : specChip("<b>5</b> seconds")) +
+        specChip("<b>30</b> fps") + specChip("<b>under 5</b> MB") + specChip("<b>H.264</b> · fast start");
+      if (!mp4Supported) {
+        mp4Hint.textContent = show
+          ? "Slideshows export as MP4, which needs a browser that can encode H.264: a current Chrome, Edge or Safari."
+          : "MP4 needs a browser that can encode H.264: a current Chrome, Edge or Safari.";
+      } else if (show) {
+        mp4Hint.textContent = slides.length < 2
+          ? "Add at least two photos to make a slideshow."
+          : "Targets about " + mb(mp4Bitrate(d) * secs / 8) + " MB at most; still photos usually come in well under. Rendering takes a second or two. " +
+            "The loop is seamless: with crossfade on, the last photo fades back into the first.";
+      } else {
+        mp4Hint.textContent = "Targets about " + mb(mp4Bitrate(d) * SPEC.seconds / 8) + " MB. The clip plays through once in real time while it's captured, " +
+          "so export takes about 5 seconds. Silent, loops, and the index sits at the front of the file so browsers start playing before it finishes downloading.";
+      }
     } else {
       specStrip.innerHTML = specChip("<b>440 × 248</b> px") + specChip("<b>5</b> seconds") +
         specChip("<b>20</b> fps, <b>12</b> if needed") + specChip("<b>under 5</b> MB");
     }
+    updateExportState();
   }
   fmtMp4Btn.addEventListener("click", function () { if (!busy && mp4Supported) { format = "mp4"; renderFormat(); } });
-  fmtGifBtn.addEventListener("click", function () { if (!busy) { format = "gif"; renderFormat(); } });
+  fmtGifBtn.addEventListener("click", function () { if (!busy && appMode === "clip") { format = "gif"; renderFormat(); } });
   sizeInput.addEventListener("change", renderFormat);
   qualityInput.addEventListener("change", renderFormat);
+  secsInput.addEventListener("change", renderFormat);
   if (!mp4Supported) {
     fmtMp4Btn.disabled = true;
     fmtMp4Btn.title = "This browser can't encode video (no WebCodecs). Use a current Chrome, Edge, Safari or Firefox for MP4.";
   }
+
+  /* ---------- modes ---------- */
+  function setMode(m) {
+    if (busy || m === appMode) return;
+    appMode = m;
+    modeClipBtn.setAttribute("aria-selected", m === "clip");
+    modeShowBtn.setAttribute("aria-selected", m === "show");
+    clipModeEl.classList.toggle("hidden", m !== "clip");
+    showModeEl.classList.toggle("hidden", m !== "show");
+    previewing = false;
+    video.pause();
+    renderFormat();
+    if (m === "clip") positionCropOverlay();
+  }
+  modeClipBtn.addEventListener("click", function () { setMode("clip"); });
+  modeShowBtn.addEventListener("click", function () { setMode("show"); });
+
+  /* ---------- labels ---------- */
+  // Geometry at 440 px wide; scales with the output. The .label-preview CSS mirrors these numbers in cqw.
+  var LABEL = { font: 13, padX: 8, padY: 4, margin: 10, radius: 3, lineHeight: 1.25 };
+  var LABEL_FONT = '"Space Grotesk", ui-sans-serif, system-ui, sans-serif';
+
+  function ensureLabelFont() {
+    try { return document.fonts.load("600 26px " + LABEL_FONT).catch(function () {}); } catch (e) { return Promise.resolve(); }
+  }
+
+  function drawLabel(ctx, text, W, H) {
+    text = (text || "").trim();
+    if (!text) return;
+    var k = W / SPEC.w, fs = LABEL.font * k, padX = LABEL.padX * k, padY = LABEL.padY * k, m = LABEL.margin * k;
+    ctx.save();
+    ctx.font = "600 " + fs + "px " + LABEL_FONT;
+    ctx.textBaseline = "middle";
+    var maxW = W - 2 * m - 2 * padX, t = text;
+    if (ctx.measureText(t).width > maxW) {
+      while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+      t = t.replace(/\s+$/, "") + "…";
+    }
+    var bw = ctx.measureText(t).width + 2 * padX, bh = fs * LABEL.lineHeight + 2 * padY;
+    var x = labelPos[1] === "l" ? m : W - m - bw, y = labelPos[0] === "b" ? H - m - bh : m;
+    ctx.fillStyle = "rgba(0,0,0,0.62)";
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, bw, bh, LABEL.radius * k); else ctx.rect(x, y, bw, bh);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(t, x + padX, y + bh / 2);
+    ctx.restore();
+  }
+
+  function applyLabelPos() {
+    ["bl", "br", "tl", "tr"].forEach(function (p) { document.body.classList.toggle("pos-" + p, p === labelPos); });
+  }
+  labelPosInput.addEventListener("change", function () { labelPos = labelPosInput.value; applyLabelPos(); });
+  labelInput.addEventListener("input", function () { if (cropLabelEl) cropLabelEl.textContent = labelInput.value.trim(); });
+  labelPos = labelPosInput.value || "bl"; // browsers can restore the select after a reload
+  applyLabelPos();
+
+  /* ---------- slideshow photos ---------- */
+  var slideSeq = 0;
+  var MAX_SLIDES = 30;
+
+  // Decode once and keep a copy just big enough to fill 880 × 496, so 30 full-size photos don't eat memory.
+  async function decodePhoto(file) {
+    var bmp = await createImageBitmap(file);
+    var scale = Math.max((SPEC.w * 2) / bmp.width, (SPEC.h * 2) / bmp.height);
+    if (scale >= 1) return bmp;
+    var small = await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * scale), resizeHeight: Math.round(bmp.height * scale), resizeQuality: "high" });
+    bmp.close();
+    return small;
+  }
+
+  async function addPhotos(files) {
+    var list = Array.prototype.filter.call(files, function (f) { return f.type.indexOf("image/") === 0; });
+    var failed = [], skipped = 0;
+    for (var i = 0; i < list.length; i++) {
+      if (slides.length >= MAX_SLIDES) { skipped = list.length - i; break; }
+      try {
+        var bmp = await decodePhoto(list[i]);
+        slides.push({ id: ++slideSeq, name: list[i].name, url: URL.createObjectURL(list[i]), bitmap: bmp, label: "" });
+      } catch (e) { failed.push(list[i].name); }
+    }
+    renderSlides();
+    var msgs = [];
+    if (failed.length) msgs.push("Couldn't read " + failed.join(", ") + ". HEIC photos from iPhones need converting to JPEG first.");
+    if (skipped) msgs.push("A slideshow holds up to " + MAX_SLIDES + " photos, so " + skipped + " weren't added.");
+    if (msgs.length) showMsg(slideMsg(), msgs.join(" "));
+  }
+
+  var slideMsgEl = null;
+  function slideMsg() {
+    if (!slideMsgEl) { slideMsgEl = document.createElement("div"); slideMsgEl.className = "msg warn"; slideList.after(slideMsgEl); }
+    return slideMsgEl;
+  }
+
+  function moveSlide(id, delta) {
+    var i = slides.findIndex(function (s) { return s.id === id; }), j = i + delta;
+    if (i < 0 || j < 0 || j >= slides.length) return;
+    var t = slides[i]; slides[i] = slides[j]; slides[j] = t;
+    renderSlides();
+  }
+  function removeSlide(id) {
+    var i = slides.findIndex(function (s) { return s.id === id; });
+    if (i < 0) return;
+    URL.revokeObjectURL(slides[i].url);
+    slides[i].bitmap.close();
+    slides.splice(i, 1);
+    renderSlides();
+  }
+
+  function iconBtn(text, title, onClick, disabled) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "ghost"; b.textContent = text; b.title = title;
+    b.setAttribute("aria-label", title); b.disabled = !!disabled;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  function renderSlides() {
+    slideList.innerHTML = "";
+    slides.forEach(function (s, i) {
+      var li = document.createElement("li");
+      li.className = "slide";
+      var num = document.createElement("span");
+      num.className = "slide-num mono";
+      num.textContent = i + 1;
+      var thumb = document.createElement("div");
+      thumb.className = "slide-thumb label-host";
+      var img = document.createElement("img");
+      img.src = s.url; img.alt = s.name;
+      var prev = document.createElement("span");
+      prev.className = "label-preview";
+      prev.textContent = s.label.trim();
+      thumb.appendChild(img); thumb.appendChild(prev);
+
+      var fields = document.createElement("div");
+      fields.className = "slide-fields";
+      var input = document.createElement("input");
+      input.type = "text"; input.className = "text-input"; input.maxLength = 120;
+      input.id = "slideLabel" + s.id;
+      input.placeholder = "Label, e.g. Place de la République · Photo: AFP";
+      input.setAttribute("aria-label", "Label for photo " + (i + 1));
+      input.value = s.label;
+      input.addEventListener("input", function () { s.label = input.value; prev.textContent = input.value.trim(); });
+      var name = document.createElement("span");
+      name.className = "slide-name mono"; name.textContent = s.name;
+      fields.appendChild(input); fields.appendChild(name);
+
+      var actions = document.createElement("div");
+      actions.className = "slide-actions";
+      actions.appendChild(iconBtn("↑", "Move up", function () { moveSlide(s.id, -1); }, i === 0));
+      actions.appendChild(iconBtn("↓", "Move down", function () { moveSlide(s.id, 1); }, i === slides.length - 1));
+      actions.appendChild(iconBtn("✕", "Remove photo", function () { removeSlide(s.id); }));
+
+      li.appendChild(num); li.appendChild(thumb); li.appendChild(fields); li.appendChild(actions);
+      slideList.appendChild(li);
+    });
+    photoDrop.classList.toggle("compact", slides.length > 0);
+    photoDrop.querySelector(".big").textContent = slides.length ? "Add more photos" : "Drop photos here, or click to add them";
+    renderFormat();
+  }
+
+  photoDrop.addEventListener("click", function () { if (!busy) photoInput.click(); });
+  photoDrop.addEventListener("keydown", function (e) { if ((e.key === "Enter" || e.key === " ") && !busy) { e.preventDefault(); photoInput.click(); } });
+  photoInput.addEventListener("change", function () {
+    var files = Array.prototype.slice.call(photoInput.files);
+    photoInput.value = "";
+    addPhotos(files);
+  });
+  ["dragenter", "dragover"].forEach(function (evt) {
+    photoDrop.addEventListener(evt, function (e) { e.preventDefault(); photoDrop.classList.add("drag-over"); });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    photoDrop.addEventListener(evt, function (e) { e.preventDefault(); photoDrop.classList.remove("drag-over"); });
+  });
+  photoDrop.addEventListener("drop", function (e) { if (!busy && e.dataTransfer.files) addPhotos(e.dataTransfer.files); });
 
   /* ---------- helpers ---------- */
   function fmtTime(t) {
@@ -593,7 +964,11 @@
     cropDimsEl = document.createElement("span");
     cropDimsEl.className = "crop-dims mono";
     cropZoomGuideEl = document.createElement("div");
-    cropZoomGuideEl.className = "crop-zoom-guide";
+    cropZoomGuideEl.className = "crop-zoom-guide label-host";
+    cropLabelEl = document.createElement("span");
+    cropLabelEl.className = "label-preview";
+    cropLabelEl.textContent = labelInput.value.trim();
+    cropZoomGuideEl.appendChild(cropLabelEl);
     cropHandleEl = document.createElement("span");
     cropHandleEl.className = "crop-handle";
     cropBoxEl.appendChild(cropDimsEl);
@@ -637,9 +1012,9 @@
     zoomInput.value = 100;
     zoomValueEl.textContent = "100%";
     frameSection.classList.remove("hidden");
-    exportSection.classList.remove("hidden");
     fitCropToAspect(true);
     updateClipUI();
+    renderFormat();
   }
 
   video.addEventListener("loadeddata", function () { positionCropOverlay(); });
@@ -713,7 +1088,7 @@
     } else {
       lengthWarn.classList.remove("show");
     }
-    exportBtn.disabled = busy || short;
+    updateExportState();
   }
 
   setStartBtn.addEventListener("click", function () {
@@ -754,16 +1129,14 @@
     var pxH = Math.round((crop.h * vh) / zoom);
     cropDimsEl.textContent = zoom > 1.001 ? (pxW + " × " + pxH + " source px (zoom " + Math.round(zoom * 100) + "%)") : (pxW + " × " + pxH + " source px");
 
-    if (zoom > 1.001) {
-      var inset = 50 * (1 - 1 / zoom) + "%";
-      cropZoomGuideEl.style.top = inset;
-      cropZoomGuideEl.style.left = inset;
-      cropZoomGuideEl.style.right = inset;
-      cropZoomGuideEl.style.bottom = inset;
-      cropZoomGuideEl.style.display = "block";
-    } else {
-      cropZoomGuideEl.style.display = "none";
-    }
+    // The inner area is what ends up in the export; it also carries the label preview.
+    var inset = (zoom > 1.001 ? 50 * (1 - 1 / zoom) : 0) + "%";
+    cropZoomGuideEl.style.top = inset;
+    cropZoomGuideEl.style.left = inset;
+    cropZoomGuideEl.style.right = inset;
+    cropZoomGuideEl.style.bottom = inset;
+    cropZoomGuideEl.style.display = "block";
+    cropZoomGuideEl.classList.toggle("zoomed", zoom > 1.001);
   }
   window.addEventListener("resize", positionCropOverlay);
 
@@ -841,10 +1214,14 @@
   /* ---------- busy state ---------- */
   function setBusy(b) {
     busy = b;
-    [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub, autoCompressInput, fmtGifBtn, sizeInput, qualityInput].forEach(function (el) { el.disabled = b; });
+    [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub, autoCompressInput, sizeInput, qualityInput,
+     modeClipBtn, modeShowBtn, labelInput, labelPosInput, secsInput, transInput].forEach(function (el) { el.disabled = b; });
     fmtMp4Btn.disabled = b || !mp4Supported;
-    exportBtn.disabled = b || tooShort();
-    exportBtn.textContent = b ? "Exporting…" : (format === "mp4" ? "Export MP4" : "Export GIF");
+    fmtGifBtn.disabled = b || appMode === "show";
+    slideList.inert = b;
+    photoDrop.inert = b;
+    updateExportState();
+    exportBtn.textContent = b ? "Exporting…" : (effFormat() === "mp4" ? "Export MP4" : "Export GIF");
     if (cropBoxEl) cropBoxEl.style.pointerEvents = b ? "none" : "auto";
   }
   function setProgress(frac, label) {
@@ -867,7 +1244,9 @@
     return { sx: sx, sy: sy, sw: sw, sh: sh };
   }
 
+  var captureThumb = null;
   async function captureFrames(tier, prefix) {
+    await ensureLabelFont();
     var cv = document.createElement("canvas");
     cv.width = SPEC.w;
     cv.height = SPEC.h;
@@ -879,7 +1258,9 @@
     for (var i = 0; i < tier.frames; i++) {
       await seekTo(clipStart + i / tier.fps);
       ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, SPEC.w, SPEC.h);
+      drawLabel(ctx, labelInput.value, SPEC.w, SPEC.h);
       out.push(ctx.getImageData(0, 0, SPEC.w, SPEC.h));
+      if (i === 0) captureThumb = makeThumb(cv);
       setProgress(0.5 * (i + 1) / tier.frames, prefix + "capturing frame " + (i + 1) + " of " + tier.frames);
     }
     return out;
@@ -1179,14 +1560,11 @@
     return buf instanceof ArrayBuffer ? new Uint8Array(buf.slice(0)) : new Uint8Array(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
   }
 
-  // Captures the clip and encodes it in one pass. Frames are resampled to a constant 30 fps
-  // (nearest source frame), so the file is exactly 150 frames / 5.00 s whatever the source rate.
-  async function captureEncodeMp4(d, bitrate, prefix) {
+  // One H.264 encode session: feed it canvases in order, then finish() returns the muxed MP4 bytes.
+  async function openMp4Encoder(d, bitrate, total) {
     var cfg = await pickEncoderConfig(d.w, d.h, bitrate);
     if (!cfg) throw new Error("this browser can't encode H.264. Switch to GIF, or use a current Chrome, Edge or Safari.");
-
-    var total = SPEC.seconds * MP4_FPS, next = 0;
-    var samples = [], avcC = null, encErr = null;
+    var samples = [], avcC = null, encErr = null, next = 0;
     var encoder = new VideoEncoder({
       output: function (chunk, meta) {
         if (!avcC && meta && meta.decoderConfig && meta.decoderConfig.description) avcC = toU8(meta.decoderConfig.description);
@@ -1197,6 +1575,37 @@
       error: function (e) { encErr = e; }
     });
     encoder.configure(cfg);
+    return {
+      codec: cfg.codec,
+      count: function () { return next; },
+      add: function (source, keyFrame) {
+        if (encErr) throw encErr;
+        var vf = new VideoFrame(source, { timestamp: Math.round(next * 1e6 / MP4_FPS), duration: Math.round(1e6 / MP4_FPS) });
+        encoder.encode(vf, { keyFrame: next === 0 || !!keyFrame });
+        vf.close();
+        next++;
+      },
+      // Only needed when frames are produced faster than real time (slideshows).
+      drain: async function () {
+        while (encoder.encodeQueueSize > 6 && !encErr) await new Promise(function (r) { setTimeout(r, 2); });
+      },
+      finish: async function () {
+        await encoder.flush();
+        encoder.close();
+        if (encErr) throw encErr;
+        if (!avcC || samples.length !== total) throw new Error("the encoder returned " + samples.length + " of " + total + " frames.");
+        return muxMp4(d.w, d.h, MP4_FPS, samples, avcC);
+      },
+      close: function () { if (encoder.state !== "closed") encoder.close(); }
+    };
+  }
+
+  // Video clip: captures and encodes in one pass. Frames are resampled to a constant 30 fps
+  // (nearest source frame), so the file is exactly 150 frames / 5.00 s whatever the source rate.
+  async function captureClipMp4(d, bitrate, prefix) {
+    await ensureLabelFont();
+    var total = SPEC.seconds * MP4_FPS;
+    var enc = await openMp4Encoder(d, bitrate, total);
 
     var cv = document.createElement("canvas");
     cv.width = d.w;
@@ -1204,21 +1613,21 @@
     var ctx = cv.getContext("2d", { alpha: false });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
-    var r = sampleRect();
+    var r = sampleRect(), label = labelInput.value, thumb = null;
 
-    function draw() { ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, d.w, d.h); }
+    function draw() {
+      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, d.w, d.h);
+      drawLabel(ctx, label, d.w, d.h);
+    }
     function emit() {
-      if (encErr) throw encErr;
-      var vf = new VideoFrame(cv, { timestamp: Math.round(next * 1e6 / MP4_FPS), duration: Math.round(1e6 / MP4_FPS) });
-      encoder.encode(vf, { keyFrame: next === 0 });
-      vf.close();
-      next++;
-      setProgress(0.95 * next / total, prefix + "frame " + next + " of " + total);
+      enc.add(cv);
+      setProgress(0.95 * enc.count() / total, prefix + "frame " + enc.count() + " of " + total);
     }
 
     try {
       await seekTo(clipStart);
       draw();
+      thumb = makeThumb(cv);
 
       if (typeof video.requestVideoFrameCallback === "function") {
         // Real-time path: play the clip once and grab each presented frame.
@@ -1235,15 +1644,15 @@
             video.removeEventListener("ended", onEnded);
             video.pause();
             if (err) return reject(err);
-            try { while (next < total) emit(); resolve(); } catch (e) { reject(e); }
+            try { while (enc.count() < total) emit(); resolve(); } catch (e) { reject(e); }
           }
           function onEnded() { stop(); }
           function onFrame(now, meta) {
             if (finished) return;
             try {
               var t = meta.mediaTime - clipStart;
-              while (next < total && next / MP4_FPS < t - half) emit(); // slots before this frame keep the previous one
-              if (next >= total || t >= SPEC.seconds) return stop();
+              while (enc.count() < total && enc.count() / MP4_FPS < t - half) emit(); // slots before this frame keep the previous one
+              if (enc.count() >= total || t >= SPEC.seconds) return stop();
               draw();
               armStall();
               video.requestVideoFrameCallback(onFrame);
@@ -1258,21 +1667,84 @@
       } else {
         // Fallback: seek frame by frame (slower, but works everywhere WebCodecs does).
         emit();
-        while (next < total) {
-          await seekTo(clipStart + next / MP4_FPS);
+        while (enc.count() < total) {
+          await seekTo(clipStart + enc.count() / MP4_FPS);
           draw();
           emit();
         }
       }
 
       setProgress(0.97, prefix + "finishing");
-      await encoder.flush();
+      return { data: await enc.finish(), codec: enc.codec, thumb: thumb, seconds: SPEC.seconds };
     } finally {
-      if (encoder.state !== "closed") encoder.close();
+      enc.close();
     }
-    if (encErr) throw encErr;
-    if (!avcC || samples.length !== total) throw new Error("the encoder returned " + samples.length + " of " + total + " frames.");
-    return { data: muxMp4(d.w, d.h, MP4_FPS, samples, avcC), codec: cfg.codec };
+  }
+
+  function drawCover(ctx, img, W, H) {
+    var s = Math.max(W / img.width, H / img.height), w = img.width * s, h = img.height * s;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  }
+
+  // Slideshow: every photo is pre-rendered with its label, then held (or crossfaded) frame by frame.
+  // The last photo fades back into the first, so the loop has no seam.
+  async function renderSlideshowMp4(d, bitrate, prefix) {
+    await ensureLabelFont();
+    var n = slides.length, per = Math.round(parseFloat(secsInput.value) * MP4_FPS);
+    var fadeF = transInput.value === "fade" ? Math.min(Math.round(0.5 * MP4_FPS), Math.floor(per / 3)) : 0;
+    var total = per * n;
+
+    function canvas() {
+      var c = document.createElement("canvas");
+      c.width = d.w; c.height = d.h;
+      var x = c.getContext("2d", { alpha: false });
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = "high";
+      return { c: c, x: x };
+    }
+    var cards = slides.map(function (s) {
+      var k = canvas();
+      drawCover(k.x, s.bitmap, d.w, d.h);
+      drawLabel(k.x, s.label, d.w, d.h);
+      return k.c;
+    });
+    var mix = canvas();
+
+    var enc = await openMp4Encoder(d, bitrate, total);
+    try {
+      for (var i = 0; i < total; i++) {
+        var si = Math.floor(i / per), local = i - si * per, into = local - (per - fadeF);
+        if (fadeF > 0 && into >= 0) {
+          mix.x.globalAlpha = 1;
+          mix.x.drawImage(cards[si], 0, 0);
+          mix.x.globalAlpha = (into + 1) / (fadeF + 1);
+          mix.x.drawImage(cards[(si + 1) % n], 0, 0);
+          mix.x.globalAlpha = 1;
+          enc.add(mix.c);
+        } else {
+          enc.add(cards[si], local === 0); // a keyframe at each new photo
+        }
+        await enc.drain();
+        if (i % 15 === 14) {
+          setProgress(0.95 * (i + 1) / total, prefix + "frame " + (i + 1) + " of " + total);
+          await tick();
+        }
+      }
+      setProgress(0.97, prefix + "finishing");
+      return { data: await enc.finish(), codec: enc.codec, thumb: makeThumb(cards[0]), seconds: total / MP4_FPS };
+    } finally {
+      enc.close();
+    }
+  }
+
+  // Small JPEG preview for the recent-downloads list.
+  function makeThumb(source) {
+    var c = document.createElement("canvas");
+    c.width = 176; c.height = 99;
+    var x = c.getContext("2d");
+    x.imageSmoothingQuality = "high";
+    x.drawImage(source, 0, 0, 176, 99);
+    return new Promise(function (resolve) { c.toBlob(resolve, "image/jpeg", 0.8); });
   }
 
   function u32(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]; }
@@ -1404,7 +1876,7 @@
     });
   }
 
-  async function buildMp4Report(u8, d) {
+  async function buildMp4Report(u8, d, seconds) {
     var info = inspectMp4(u8);
     var dur = info.timescale ? info.duration / info.timescale : 0;
     var fps = dur > 0 ? info.samples / dur : 0;
@@ -1414,7 +1886,7 @@
     var dimsTarget = d.w + " × " + d.h + (d.scale > 1 ? " (2× of 440 × 248)" : "");
     var checks = [
       { label: "Dimensions", target: dimsTarget, value: info.w + " × " + info.h, ok: info.w === d.w && info.h === d.h },
-      { label: "Duration", target: "5 s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - SPEC.seconds) <= 0.02 },
+      { label: "Duration", target: (+seconds.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - seconds) <= 0.02 },
       { label: "Frame rate", target: MP4_FPS + " fps", value: fps.toFixed(1) + " fps", ok: Math.abs(fps - MP4_FPS) < 0.1 },
       { label: "File size", target: "under 5 MB", value: mb(u8.length) + " MB", ok: u8.length < SPEC.maxBytes },
       { label: "Fast start", target: "index before data", value: info.valid ? info.top.join(" → ") : "unreadable", ok: info.valid && info.top.indexOf("moov") >= 0 && info.top.indexOf("moov") < info.top.indexOf("mdat") },
@@ -1425,8 +1897,14 @@
     return { checks: checks, ok: ok, onlySizeFails: onlySizeFails };
   }
 
+  function stamp() {
+    var t = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return t.getFullYear() + p(t.getMonth() + 1) + p(t.getDate()) + "-" + p(t.getHours()) + p(t.getMinutes()) + p(t.getSeconds());
+  }
+
   async function runExportMp4() {
-    if (busy || !video.videoWidth || tooShort()) return;
+    if (busy || !canExport()) return;
+    var show = appMode === "show";
     video.pause();
     previewing = false;
     hideResult();
@@ -1435,18 +1913,23 @@
       var d = mp4Dims(), bitrate = mp4Bitrate(d), report = null, bytes = 0;
       // Variable bitrate rarely overshoots by much, but if a busy clip lands over 5 MB, retarget and redo.
       for (var attempt = 0; attempt < 3; attempt++) {
-        var prefix = attempt === 0 ? "MP4 · " : "came to " + mb(bytes) + " MB — redoing at a lower bitrate · ";
-        var enc = await captureEncodeMp4(d, bitrate, prefix);
+        var prefix = attempt === 0 ? (show ? "Slideshow · " : "MP4 · ") : "came to " + mb(bytes) + " MB — redoing at a lower bitrate · ";
+        var enc = show ? await renderSlideshowMp4(d, bitrate, prefix) : await captureClipMp4(d, bitrate, prefix);
         bytes = enc.data.length;
         setProgress(0.99, prefix + "verifying");
-        report = await buildMp4Report(enc.data, d);
+        report = await buildMp4Report(enc.data, d, enc.seconds);
         if (report.ok) {
-          var name = "loupe-" + d.w + "x" + d.h + "-" + MP4_FPS + "fps.mp4";
+          var secs = +enc.seconds.toFixed(1);
+          var name = show
+            ? "loupe-slideshow-" + slides.length + "photos-" + d.w + "x" + d.h + "-" + stamp() + ".mp4"
+            : "loupe-clip-" + d.w + "x" + d.h + "-" + stamp() + ".mp4";
           showSuccess(
             new Blob([enc.data], { type: "video/mp4" }), report, name,
-            "H.264 (" + enc.codec + "), " + SPEC.seconds * MP4_FPS + " frames at " + MP4_FPS + " fps, no audio. " +
+            "H.264 (" + enc.codec + "), " + Math.round(enc.seconds * MP4_FPS) + " frames at " + MP4_FPS + " fps, no audio. " +
+            (show ? slides.length + " photos, " + secsInput.value + " s each" + (transInput.value === "fade" ? " with crossfades" : "") + ". " : "") +
             (attempt ? "Bitrate was lowered to fit under 5 MB. " : "") + "Every spec checked against the finished file.",
-            '<video src="' + name + '" width="' + SPEC.w + '" height="' + SPEC.h + '"\n  autoplay loop muted playsinline preload="auto"></video>'
+            '<video src="' + name + '" width="' + SPEC.w + '" height="' + SPEC.h + '"\n  autoplay loop muted playsinline preload="auto"></video>',
+            { detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · MP4 · " + d.w + "×" + d.h + " · " + secs + " s", thumb: enc.thumb }
           );
           return;
         }
@@ -1456,7 +1939,8 @@
         }
         bitrate = Math.floor(bitrate * (SPEC.maxBytes * 0.85) / bytes);
       }
-      showFailure(report, "Even at a reduced bitrate this stretch comes to " + mb(bytes) + " MB, over the 5 MB limit. Try Compact quality, 1× size, or a calmer 5 seconds.");
+      showFailure(report, "Even at a reduced bitrate this comes to " + mb(bytes) + " MB, over the 5 MB limit. Try Compact quality or 1× size" +
+        (show ? ", or fewer photos." : ", or a calmer 5 seconds."));
     } catch (err) {
       showFailure(null, "Something went wrong while exporting: " + (err && err.message ? err.message : err));
     } finally {
@@ -1465,6 +1949,7 @@
       progressFill.style.width = "0%";
       progressLabel.textContent = "";
       updateClipUI();
+      renderFormat();
     }
   }
 
@@ -1546,9 +2031,10 @@
 
   function mb(bytes) { return (bytes / 1e6).toFixed(2); }
 
-  function showSuccess(blob, report, filename, note, embed) {
+  function showSuccess(blob, report, filename, note, embed, meta) {
     if (lastResultURL) URL.revokeObjectURL(lastResultURL);
     lastResultBlob = blob;
+    lastMeta = meta || null;
     lastResultURL = URL.createObjectURL(blob);
     lastFilename = filename;
     var isVideo = blob.type === "video/mp4";
@@ -1583,7 +2069,7 @@
   }
 
   /* ---------- the export run ---------- */
-  function runExport() { return format === "mp4" ? runExportMp4() : runExportGif(); }
+  function runExport() { return effFormat() === "mp4" ? runExportMp4() : runExportGif(); }
 
   async function runExportGif() {
     if (busy || !video.videoWidth || tooShort()) return;
@@ -1613,10 +2099,11 @@
         if (report.ok) {
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }),
-            report, "loupe-440x248-" + tier.fps + "fps.gif",
+            report, "loupe-clip-440x248-" + tier.fps + "fps-" + stamp() + ".gif",
             ti === 0
               ? "Exported at 20 fps, 100 frames. Every spec checked against the finished file."
-              : "The 20 fps version came to " + firstMB + " MB, over the 5 MB limit, so this is the 12 fps redo."
+              : "The 20 fps version came to " + firstMB + " MB, over the 5 MB limit, so this is the 12 fps redo.",
+            null, { detail: "Clip · GIF · 440×248 · " + tier.fps + " fps · 5 s", thumb: captureThumb }
           );
           return;
         }
@@ -1648,9 +2135,10 @@
         if (creport.ok) {
           showSuccess(
             new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }),
-            creport, "loupe-440x248-" + tier12.fps + "fps.gif",
+            creport, "loupe-clip-440x248-" + tier12.fps + "fps-" + stamp() + ".gif",
             "The standard 12 fps export came to " + standardMB + " MB, over the 5 MB limit, so the footage was compressed: " +
-            level.name + " (" + describeLevel(level) + "). That's the lightest step that fit."
+            level.name + " (" + describeLevel(level) + "). That's the lightest step that fit.",
+            null, { detail: "Clip · GIF · 440×248 · 12 fps · 5 s · " + level.name.toLowerCase() + " compression", thumb: captureThumb }
           );
           return;
         }
@@ -1686,36 +2174,135 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
   }
 
-  downloadBtn.addEventListener("click", function () {
-    if (!lastResultBlob) return;
-    downloadBtn.disabled = true;
-    downloadHint.textContent = "";
-    var blob = lastResultBlob, filename = lastFilename;
-
+  // Hands a file to the viewer: the Claude artifact runtime when present, a plain download link otherwise.
+  function saveFile(blob, filename, hintEl, btn) {
+    btn.disabled = true;
+    hintEl.textContent = "";
     var hasRuntime = window.claude && typeof window.claude.use === "function";
     var capPromise = hasRuntime ? window.claude.use("downloads") : Promise.resolve(null);
-
-    capPromise.then(function (downloads) {
-      if (!downloads) {
-        fallbackAnchorDownload(blob, filename);
-        downloadBtn.disabled = false;
-        return;
-      }
+    return capPromise.then(function (downloads) {
+      if (!downloads) { fallbackAnchorDownload(blob, filename); return; }
       return downloads.save({ filename: filename, data: blob }).then(function (result) {
-        downloadHint.textContent = result.status === "saved" ? "Saved." : "Sent to your chosen destination.";
-        downloadBtn.disabled = false;
+        hintEl.textContent = result.status === "saved" ? "Saved." : "Sent to your chosen destination.";
       }, function (err) {
-        downloadBtn.disabled = false;
         var code = err && err.code;
         if (code === "declined") return;
-        if (code === "rate_limited") { downloadHint.textContent = "A save prompt is already open — try again in a moment."; return; }
+        if (code === "rate_limited") { hintEl.textContent = "A save prompt is already open — try again in a moment."; return; }
         fallbackAnchorDownload(blob, filename);
       });
     }).catch(function () {
       fallbackAnchorDownload(blob, filename);
-      downloadBtn.disabled = false;
-    });
+    }).then(function () { btn.disabled = false; });
+  }
+
+  downloadBtn.addEventListener("click", function () {
+    if (!lastResultBlob) return;
+    var blob = lastResultBlob, filename = lastFilename, meta = lastMeta;
+    saveFile(blob, filename, downloadHint, downloadBtn);
+    if (blob !== lastSavedBlob) {
+      lastSavedBlob = blob;
+      Promise.resolve(meta && meta.thumb).then(function (thumb) {
+        return Recent.add({ name: filename, type: blob.type, size: blob.size, created: Date.now(), blob: blob, thumb: thumb || null, detail: meta ? meta.detail : "" });
+      }).then(renderRecent, function () {});
+    }
   });
+
+  /* ---------- recent downloads: IndexedDB in this browser only, capped by count and size ---------- */
+  var Recent = (function () {
+    var DB = "loupe", STORE = "downloads", MAX_ITEMS = 12, MAX_BYTES = 60e6, dbp = null;
+    function open() {
+      if (!dbp) dbp = new Promise(function (resolve, reject) {
+        var req = indexedDB.open(DB, 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore(STORE, { keyPath: "id", autoIncrement: true }); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { reject(req.error); };
+      });
+      return dbp;
+    }
+    function run(mode, fn) {
+      return open().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(STORE, mode), store = tx.objectStore(STORE), out;
+          Promise.resolve(fn(store)).then(function (v) { out = v; });
+          tx.oncomplete = function () { resolve(out); };
+          tx.onerror = tx.onabort = function () { reject(tx.error); };
+        });
+      });
+    }
+    function req(r) { return new Promise(function (resolve, reject) { r.onsuccess = function () { resolve(r.result); }; r.onerror = function () { reject(r.error); }; }); }
+    function list() {
+      return run("readonly", function (st) { return req(st.getAll()); }).then(function (items) {
+        return items.sort(function (a, b) { return b.created - a.created; });
+      });
+    }
+    function add(item) {
+      return run("readwrite", function (st) { return req(st.add(item)); }).then(list).then(function (items) {
+        // Newest first: keep while under both caps, drop the rest.
+        var keep = 0, bytes = 0, drop = [];
+        items.forEach(function (it) {
+          if (keep < MAX_ITEMS && bytes + it.size <= MAX_BYTES) { keep++; bytes += it.size; } else drop.push(it.id);
+        });
+        if (!drop.length) return;
+        return run("readwrite", function (st) { drop.forEach(function (id) { st.delete(id); }); });
+      });
+    }
+    function remove(id) { return run("readwrite", function (st) { st.delete(id); }); }
+    function clear() { return run("readwrite", function (st) { st.clear(); }); }
+    return { list: list, add: add, remove: remove, clear: clear };
+  })();
+
+  var recentURLs = [];
+  function fmtDate(ms) {
+    var d = new Date(ms);
+    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  function renderRecent() {
+    return Recent.list().then(function (items) {
+      recentURLs.forEach(URL.revokeObjectURL);
+      recentURLs = [];
+      recentList.innerHTML = "";
+      recentSection.classList.toggle("hidden", items.length === 0);
+      items.forEach(function (it) {
+        var li = document.createElement("li");
+        var img = document.createElement("img");
+        img.alt = "";
+        if (it.thumb) { var u = URL.createObjectURL(it.thumb); recentURLs.push(u); img.src = u; }
+        var info = document.createElement("div");
+        info.style.minWidth = "0";
+        var name = document.createElement("div");
+        name.className = "r-name mono"; name.textContent = it.name; name.title = it.name;
+        var meta = document.createElement("div");
+        meta.className = "r-meta mono";
+        meta.textContent = [it.detail, mb(it.size) + " MB", fmtDate(it.created)].filter(Boolean).join(" · ");
+        var hint = document.createElement("div");
+        hint.className = "r-meta";
+        info.appendChild(name); info.appendChild(meta); info.appendChild(hint);
+        var actions = document.createElement("div");
+        actions.className = "r-actions";
+        var dl = document.createElement("button");
+        dl.type = "button"; dl.textContent = "Download"; dl.setAttribute("aria-label", "Download " + it.name);
+        dl.addEventListener("click", function () { saveFile(it.blob, it.name, hint, dl); });
+        var del = document.createElement("button");
+        del.type = "button"; del.className = "ghost"; del.textContent = "Remove"; del.setAttribute("aria-label", "Remove " + it.name);
+        del.addEventListener("click", function () { Recent.remove(it.id).then(renderRecent); });
+        actions.appendChild(dl); actions.appendChild(del);
+        li.appendChild(img); li.appendChild(info); li.appendChild(actions);
+        recentList.appendChild(li);
+      });
+    }).catch(function () { recentSection.classList.add("hidden"); });
+  }
+  clearRecentBtn.addEventListener("click", function () {
+    if (clearRecentBtn.dataset.armed) {
+      delete clearRecentBtn.dataset.armed;
+      clearRecentBtn.textContent = "Clear all";
+      Recent.clear().then(renderRecent);
+    } else {
+      clearRecentBtn.dataset.armed = "1";
+      clearRecentBtn.textContent = "Click again to clear";
+      setTimeout(function () { delete clearRecentBtn.dataset.armed; clearRecentBtn.textContent = "Clear all"; }, 3000);
+    }
+  });
+  renderRecent();
 
   renderFormat();
   // WebCodecs can exist without an H.264 encoder (some Linux builds) — find out now, not at export time.
@@ -1725,7 +2312,8 @@
       mp4Supported = false;
       fmtMp4Btn.disabled = true;
       fmtMp4Btn.title = "This browser has no H.264 encoder. Use a current Chrome, Edge or Safari for MP4.";
-      if (format === "mp4" && !busy) { format = "gif"; renderFormat(); }
+      if (format === "mp4") format = "gif";
+      if (!busy) renderFormat();
     });
   }
 
