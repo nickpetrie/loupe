@@ -244,6 +244,10 @@
   .generate-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .generate-row .progress-track { flex: 1 1 160px; }
   #exportBtn { padding: 10px 18px; font-size: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); padding: 2px; }
+  .seg button { border: none; background: transparent; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-family: inherit; color: var(--text-muted); }
+  .seg button[aria-checked="true"] { background: var(--surface-2); color: var(--text); font-weight: 500; }
+  .seg button:hover:not(:disabled) { color: var(--text); }
   .export-info { font-size: 12px; color: var(--text-muted); margin: 2px 2px 0; }
   .progress-track {
     flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2);
@@ -427,7 +431,7 @@
   <header>
     <div>
       <div class="brand"><span class="brand-mark"></span>LOUPE</div>
-      <p class="tagline">Turn 5 seconds of video, or a set of photos, into a small looping MP4 that already meets the spec.</p>
+      <p class="tagline">Turn 5 seconds of video, or a set of photos, into a looping GIF or MP4 that already meets the spec.</p>
     </div>
     <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
   </header>
@@ -533,8 +537,11 @@
 
   <section id="exportSection" class="hidden">
     <div class="generate-row">
-      <button class="primary" id="exportBtn" type="button">Export MP4</button>
-      <button class="ghost" id="gifBtn" type="button" title="For places that only accept GIF: 440 × 248, 20 fps (12 if needed), compressed until it fits under 5 MB">GIF</button>
+      <div class="seg mono" role="radiogroup" aria-label="Format">
+        <button type="button" role="radio" id="fmtGif" aria-checked="true">GIF</button>
+        <button type="button" role="radio" id="fmtMp4" aria-checked="false">MP4</button>
+      </div>
+      <button class="primary" id="exportBtn" type="button">Export GIF</button>
       <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     </div>
     <div class="progress-label mono" id="progressLabel"></div>
@@ -630,7 +637,8 @@
   var playBtn = $("playBtn"), setStartBtn = $("setStartBtn"), previewBtn = $("previewBtn"), changeBtn = $("changeBtn");
   var transportMsg = $("transportMsg"), lengthWarn = $("lengthWarn");
   var frameSection = $("frameSection"), zoomInput = $("zoomInput"), zoomValueEl = $("zoomValue"), resetFrameBtn = $("resetFrameBtn");
-  var exportSection = $("exportSection"), exportBtn = $("exportBtn"), gifBtn = $("gifBtn"), exportInfo = $("exportInfo");
+  var exportSection = $("exportSection"), exportBtn = $("exportBtn"), exportInfo = $("exportInfo");
+  var fmtGifBtn = $("fmtGif"), fmtMp4Btn = $("fmtMp4");
   var progressTrack = $("progressTrack"), progressFill = $("progressFill"), progressLabel = $("progressLabel");
   var resultSection = $("resultSection"), resultImg = $("resultImg"), checklistEl = $("checklist");
   var resultNote = $("resultNote"), downloadBtn = $("downloadBtn"), downloadHint = $("downloadHint");
@@ -676,12 +684,26 @@
   }
   function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_FALLBACK_BPP * d.w * d.h * MP4_FPS)); }
 
+  // GIF is the default because the website only takes GIF for now; each person's last choice is remembered.
+  var format = "gif";
+  try { if (localStorage.getItem("loupe.format") === "mp4") format = "mp4"; } catch (e) { /* storage blocked */ }
+  function effFormat() { return mp4Supported ? format : "gif"; }
+  function setFormat(f) {
+    if (busy || (f === "mp4" && !mp4Supported)) return;
+    format = f;
+    try { localStorage.setItem("loupe.format", f); } catch (e) { /* storage blocked */ }
+    renderExport();
+  }
+  fmtGifBtn.addEventListener("click", function () { setFormat("gif"); });
+  fmtMp4Btn.addEventListener("click", function () { setFormat("mp4"); });
+
   function showSeconds() { return slides.length * parseFloat(secsInput.value); }
   function clipReady() { return !!video.videoWidth && !tooShort(); }
-  function canExport() { return mp4Supported && (appMode === "show" ? slides.length >= 2 : clipReady()); }
+  function canExport() { return appMode === "show" ? slides.length >= 2 : clipReady(); }
   function updateExportState() {
     exportBtn.disabled = busy || !canExport();
-    gifBtn.disabled = busy || appMode !== "clip" || !clipReady();
+    fmtGifBtn.disabled = busy;
+    fmtMp4Btn.disabled = busy || !mp4Supported;
   }
   function fmtSecs(x) { return (+x.toFixed(1)) + " s"; }
 
@@ -691,25 +713,22 @@
     exportSection.classList.toggle("hidden", show ? slides.length === 0 : !video.videoWidth);
     showControls.classList.toggle("hidden", slides.length === 0);
 
-    // Without an H.264 encoder, GIF is the only clip export, so it takes the main button's place.
-    exportBtn.classList.toggle("hidden", !mp4Supported && !show);
-    gifBtn.classList.toggle("hidden", show);
-    gifBtn.classList.toggle("primary", !mp4Supported);
-    gifBtn.classList.toggle("ghost", mp4Supported);
-    gifBtn.textContent = mp4Supported ? "GIF" : "Export GIF";
-    if (!busy) exportBtn.textContent = "Export MP4";
+    var f = effFormat();
+    fmtGifBtn.setAttribute("aria-checked", f === "gif");
+    fmtMp4Btn.setAttribute("aria-checked", f === "mp4");
+    fmtMp4Btn.title = mp4Supported ? "Smaller and smoother, for places that accept video" : "MP4 needs a current Chrome, Edge or Safari";
+    if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : "Export GIF";
 
-    var d = mp4Dims(), size = d.w + " × " + d.h;
+    var d = mp4Dims(), size = f === "mp4" ? d.w + " × " + d.h : "440 × 248";
     if (show) {
-      exportInfo.textContent = !mp4Supported
-        ? "Slideshows export as MP4, which needs a current Chrome, Edge or Safari."
-        : slides.length < 2
-          ? "Add at least two photos."
-          : "MP4 · " + size + " · 30 fps · " + slides.length + " photos, " + fmtSecs(showSeconds()) + " loop";
+      exportInfo.textContent = slides.length < 2
+        ? "Add at least two photos."
+        : (f === "mp4" ? "MP4 · " + size + " · 30 fps · " : "GIF · " + size + " · ") +
+          slides.length + " photos, " + fmtSecs(showSeconds()) + " loop · under 5 MB";
     } else {
-      exportInfo.textContent = mp4Supported
+      exportInfo.textContent = f === "mp4"
         ? "MP4 · " + size + " · 30 fps · 5 s · under 5 MB · takes about 5 s"
-        : "GIF · 440 × 248 · 5 s · under 5 MB. For MP4, use a current Chrome, Edge or Safari.";
+        : "GIF · " + size + " · 20 fps (12 if needed) · 5 s · under 5 MB";
     }
     updateExportState();
   }
@@ -2041,7 +2060,7 @@
   }
 
   async function runExportMp4() {
-    if (busy || !canExport()) return;
+    if (busy || !canExport() || !mp4Supported) return;
     var show = appMode === "show";
     video.pause();
     previewing = false;
@@ -2138,13 +2157,19 @@
     return null;
   }
 
-  function buildReport(info, bytes) {
+  // expect.seconds: required length (default 5 s). expect.frames: for slideshows, which hold each photo
+  // as one long frame, so a frame-rate check would be meaningless; the frame count is checked instead.
+  function buildReport(info, bytes, expect) {
+    expect = expect || {};
+    var want = expect.seconds || SPEC.seconds;
     var dur = info.cs / 100;
     var fps = dur > 0 ? info.frames / dur : 0;
     var checks = [
       { label: "Dimensions", target: "440 × 248", value: info.w + " × " + info.h, ok: info.w === SPEC.w && info.h === SPEC.h },
-      { label: "Duration", target: "5 s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - SPEC.seconds) <= 0.02 },
-      { label: "Frame rate", target: "12 fps or higher", value: fps.toFixed(1) + " fps", ok: fps >= SPEC.minFps - 1e-6 },
+      { label: "Duration", target: (+want.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - want) <= 0.02 },
+      expect.frames
+        ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
+        : { label: "Frame rate", target: "12 fps or higher", value: fps.toFixed(1) + " fps", ok: fps >= SPEC.minFps - 1e-6 },
       { label: "File size", target: "under 5 MB", value: (bytes / 1e6).toFixed(2) + " MB", ok: bytes < SPEC.maxBytes }
     ];
     var ok = checks.every(function (c) { return c.ok; });
@@ -2237,6 +2262,115 @@
   /* ---------- the export run ---------- */
 
 
+  // Slideshow as GIF. Each photo is one frame held for its full time (a GIF frame can carry its own
+  // delay), so stills cost almost nothing; a crossfade adds three in-between frames. If that's over 5 MB
+  // it falls back to cuts, then to the same stepped compression clip GIFs use.
+  var GIF_FADE_FRAMES = 3, GIF_FADE_MS = 100;
+
+  async function buildSlideshowGifFrames(withFades) {
+    await ensureLabelFont();
+    var n = slides.length, holdMs = Math.round(parseFloat(secsInput.value) * 1000);
+    var fades = withFades && transInput.value === "fade" ? GIF_FADE_FRAMES : 0;
+    function canvas() {
+      var c = document.createElement("canvas");
+      c.width = SPEC.w; c.height = SPEC.h;
+      var x = c.getContext("2d", { alpha: false, willReadFrequently: true });
+      x.imageSmoothingEnabled = true;
+      x.imageSmoothingQuality = "high";
+      return { c: c, x: x };
+    }
+    var cards = [];
+    for (var i = 0; i < n; i++) {
+      var s = slides[i], k = canvas(), full = null;
+      setProgress(0.1 * i / n, "preparing photo " + (i + 1) + " of " + n);
+      try { full = await createImageBitmap(s.file); } catch (e) { /* fall back to the preview copy */ }
+      drawPhoto(k.x, full || s.bitmap, s.crop, SPEC.w, SPEC.h);
+      if (full) full.close();
+      drawLabel(k.x, s.label, SPEC.w, SPEC.h);
+      cards.push(k);
+    }
+    var frames = [], delays = [], mix = canvas();
+    for (var j = 0; j < n; j++) {
+      frames.push(cards[j].x.getImageData(0, 0, SPEC.w, SPEC.h));
+      delays.push(holdMs - fades * GIF_FADE_MS);
+      for (var f = 1; f <= fades; f++) {
+        mix.x.globalAlpha = 1;
+        mix.x.drawImage(cards[j].c, 0, 0);
+        mix.x.globalAlpha = f / (fades + 1);
+        mix.x.drawImage(cards[(j + 1) % n].c, 0, 0);
+        frames.push(mix.x.getImageData(0, 0, SPEC.w, SPEC.h));
+        delays.push(GIF_FADE_MS);
+      }
+    }
+    mix.x.globalAlpha = 1;
+    return { frames: frames, delays: delays, seconds: n * holdMs / 1000, thumb: makeThumb(cards[0].c) };
+  }
+
+  async function runExportSlideshowGif() {
+    if (busy || slides.length < 2) return;
+    hideResult();
+    setBusy(true);
+    try {
+      var tries = [{ fades: true, label: "" }, { fades: false, label: "with cuts instead of crossfades" }];
+      if (transInput.value !== "fade") tries = [tries[1]];
+      var built = null, report = null, bytes = 0, firstMB = null;
+      for (var t = 0; t < tries.length; t++) {
+        built = await buildSlideshowGifFrames(tries[t].fades);
+        var prefix = t === 0 ? "Slideshow GIF · " : "came to " + firstMB + " MB — redoing " + tries[t].label + " · ";
+        var enc = await encodeFrames(built.frames, { delays: built.delays }, prefix);
+        var info = parseGif(enc.data);
+        if (!info) throw new Error("Couldn't read the exported file back to verify it.");
+        bytes = info.end;
+        report = buildReport(info, bytes, { seconds: built.seconds, frames: built.frames.length });
+        if (report.ok) {
+          showSuccess(
+            new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }), report,
+            "loupe-slideshow-" + slides.length + "photos-440x248-" + stamp() + ".gif",
+            t === 0 ? "" : "With crossfades it came to " + firstMB + " MB, so it uses cuts to fit under 5 MB.",
+            null, { detail: "Slideshow · " + slides.length + " photos · GIF · 440×248 · " + fmtSecs(built.seconds), thumb: built.thumb }
+          );
+          return;
+        }
+        if (!report.onlySizeFails) { showFailure(report, "This export didn't meet the spec, so no download is offered."); return; }
+        if (firstMB === null) firstMB = mb(bytes);
+      }
+      // Still over 5 MB with cuts: compress in steps, lightest first.
+      var standardMB = mb(bytes);
+      for (var li = 0; li < LEVELS.length; li++) {
+        var level = LEVELS[li];
+        var cprefix = "Over 5 MB (" + standardMB + " MB) — compressing, " + level.name.toLowerCase() + " (" + (li + 1) + " of " + LEVELS.length + ") · ";
+        var cenc = await encodeCompressed(built.frames, built.delays, level, function (done, total) {
+          setProgress(0.5 + 0.5 * done / total, cprefix + "frame " + done + " of " + total);
+        });
+        var cinfo = parseGif(cenc.data);
+        if (!cinfo) throw new Error("Couldn't read the compressed file back to verify it.");
+        var creport = buildReport(cinfo, cinfo.end, { seconds: built.seconds, frames: built.frames.length });
+        report = creport;
+        bytes = cinfo.end;
+        if (creport.ok) {
+          showSuccess(
+            new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }), creport,
+            "loupe-slideshow-" + slides.length + "photos-440x248-" + stamp() + ".gif",
+            "Uncompressed it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
+              describeLevel(level) + "), the lightest step that fits under 5 MB.",
+            null, { detail: "Slideshow · " + slides.length + " photos · GIF · 440×248 · " + fmtSecs(built.seconds) + " · " + level.name.toLowerCase() + " compression", thumb: built.thumb }
+          );
+          return;
+        }
+        if (!creport.onlySizeFails) { showFailure(creport, "The compressed export didn't meet the spec, so no download is offered."); return; }
+      }
+      showFailure(report, "Even at maximum compression this comes to " + mb(bytes) + " MB, over the 5 MB limit. Try fewer photos.");
+    } catch (err) {
+      showFailure(null, "Something went wrong while exporting: " + (err && err.message ? err.message : err));
+    } finally {
+      setBusy(false);
+      progressTrack.classList.remove("show");
+      progressFill.style.width = "0%";
+      progressLabel.textContent = "";
+      renderExport();
+    }
+  }
+
   async function runExportGif() {
     if (busy || !video.videoWidth || tooShort()) return;
     video.pause();
@@ -2320,8 +2454,11 @@
       updateClipUI();
     }
   }
-  exportBtn.addEventListener("click", runExportMp4);
-  gifBtn.addEventListener("click", runExportGif);
+  exportBtn.addEventListener("click", function () {
+    if (effFormat() === "mp4") runExportMp4();
+    else if (appMode === "show") runExportSlideshowGif();
+    else runExportGif();
+  });
 
   /* ---------- download (published pages need the downloads capability) ---------- */
   function fallbackAnchorDownload(blob, filename) {
