@@ -2,6 +2,10 @@
 
 Turn a 5-second stretch of video, or a set of photos, into a looping MP4 or GIF that already meets the spec. One self-contained `index.html`: no build, no server, nothing uploaded.
 
+## Orientation
+
+Landscape (440×248) or portrait (248×440), switchable next to the framing controls and in the slideshow settings. Vertical videos switch to portrait on their own. Framing, photo crops, labels, previews, spec checks and filenames all follow the choice; MP4 doubles it (880×496 or 496×880) when the source has the detail.
+
 ## Modes
 
 **Video clip.** Pick 5 s, frame it (locked to 440:248), add an optional label, export.

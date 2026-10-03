@@ -316,18 +316,20 @@
   .modes button[aria-selected="true"]:hover:not(:disabled) { border-bottom-color: var(--accent); }
 
   /* ---------- labels: one layout, used by the canvas renderer and every on-screen preview ---------- */
-  .label-host { container-type: inline-size; }
+  /* Sized against the frame's short side (cqmin), so labels look the same in landscape and portrait.
+     Numbers are the canvas geometry at a 248 px short side: font 13, padding 4/8, margin 10, radius 3. */
+  .label-host { container-type: size; }
   .label-preview {
-    position: absolute; max-width: calc(100% - 4.55cqw);
-    font: 600 2.955cqw/1.25 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-    color: #fff; background: rgba(0,0,0,0.62); padding: 0.91cqw 1.82cqw; border-radius: 0.68cqw;
+    position: absolute; box-sizing: border-box; max-width: calc(100% - 8.065cqmin);
+    font: 600 5.242cqmin/1.25 "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+    color: #fff; background: rgba(0,0,0,0.62); padding: 1.613cqmin 3.226cqmin; border-radius: 1.21cqmin;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
   }
   .label-preview:empty { display: none; }
-  .pos-bl .label-preview { left: 2.27cqw; bottom: 2.27cqw; }
-  .pos-br .label-preview { right: 2.27cqw; bottom: 2.27cqw; }
-  .pos-tl .label-preview { left: 2.27cqw; top: 2.27cqw; }
-  .pos-tr .label-preview { right: 2.27cqw; top: 2.27cqw; }
+  .pos-bl .label-preview { left: 4.032cqmin; bottom: 4.032cqmin; }
+  .pos-br .label-preview { right: 4.032cqmin; bottom: 4.032cqmin; }
+  .pos-tl .label-preview { left: 4.032cqmin; top: 4.032cqmin; }
+  .pos-tr .label-preview { right: 4.032cqmin; top: 4.032cqmin; }
   .crop-zoom-guide.zoomed { border: 1px dashed rgba(255,255,255,0.85); }
 
   .panel {
@@ -420,6 +422,12 @@
     input[type="text"], select, .text-input { font-size: 16px; }
   }
 
+  /* ---------- portrait (248 × 440) ---------- */
+  body.orient-portrait .slide-thumb { aspect-ratio: 248 / 440; width: 99px; justify-self: center; }
+  .result-portrait .result-shell img, .result-portrait .result-shell video { width: 248px; aspect-ratio: 248 / 440; }
+  .recent img { object-fit: contain; }
+  @media (max-width: 560px) { body.orient-portrait .slide-thumb { width: 63px; } }
+
   .hidden { display: none !important; }
 
   footer {
@@ -495,9 +503,13 @@
           <input type="range" id="zoomInput" min="100" max="400" value="100" step="5" aria-label="Zoom">
           <span class="zoom-value mono" id="zoomValue">100%</span>
         </div>
+        <div class="seg mono orient-seg" role="radiogroup" aria-label="Orientation">
+          <button type="button" role="radio" data-orient="landscape" aria-checked="true">▭ Landscape</button>
+          <button type="button" role="radio" data-orient="portrait" aria-checked="false">▯ Portrait</button>
+        </div>
         <button class="ghost" id="resetFrameBtn" type="button">Reset framing</button>
       </div>
-      <p class="hint">Drag the box to reframe; the corner handle resizes it. Zoom in to clear black bars on vertical video. What's inside the box, label included, is exactly what you'll get.</p>
+      <p class="hint">Drag the box to reframe; the corner handle resizes it. Vertical videos switch to portrait on their own. What's inside the box, label included, is exactly what you'll get.</p>
     </div>
   </section>
   </div>
@@ -513,6 +525,10 @@
     </div>
     <div class="tools hidden" id="showControls">
       <div class="tool-row">
+        <div class="seg mono orient-seg" role="radiogroup" aria-label="Orientation">
+          <button type="button" role="radio" data-orient="landscape" aria-checked="true">▭ Landscape</button>
+          <button type="button" role="radio" data-orient="portrait" aria-checked="false">▯ Portrait</button>
+        </div>
         <label class="opt"><span class="crop-label mono">Each photo</span>
           <select id="secsInput" class="mono">
             <option value="1.5">1.5 s</option>
@@ -609,8 +625,14 @@
   "use strict";
 
   /* ---------- the spec ---------- */
+  // Landscape is 440 × 248; portrait is the same turned on its side. setOrientation() swaps w and h,
+  // and everything downstream (framing, crops, labels, encoders, checks) reads them at use time.
   var SPEC = { w: 440, h: 248, seconds: 5, maxBytes: 5000000, minFps: 12 };
+  var SIZES = { landscape: { w: 440, h: 248 }, portrait: { w: 248, h: 440 } };
   var CROP_ASPECT = SPEC.w / SPEC.h;
+  var orient = "landscape";
+  function dimsText() { return SPEC.w + " × " + SPEC.h; }
+  function dimsFile() { return SPEC.w + "x" + SPEC.h; }
 
   function makeDelays(n, pattern) {
     var a = [];
@@ -684,7 +706,7 @@
   var mp4Supported = typeof VideoEncoder === "function" && typeof VideoFrame === "function";
 
   // 2× (880 × 496) stays sharp on high-density screens. If the framed part of the video has fewer
-  // pixels than that, 1× (440 × 248) looks the same and is smaller, since upscaling only spends bytes.
+  // pixels than that, 1× (440 × 248, or 248 × 440 in portrait) looks the same and is smaller.
   function mp4Dims() {
     var k = 2;
     if (appMode === "clip" && video.videoWidth && sampleRect().sw < SPEC.w * 1.5) k = 1;
@@ -727,7 +749,7 @@
     fmtMp4Btn.title = mp4Supported ? "Smaller and smoother, for places that accept video" : "MP4 needs a current Chrome, Edge or Safari";
     if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : "Export GIF";
 
-    var d = mp4Dims(), size = f === "mp4" ? d.w + " × " + d.h : "440 × 248";
+    var d = mp4Dims(), size = f === "mp4" ? d.w + " × " + d.h : dimsText();
     if (show) {
       exportInfo.textContent = slides.length < 2
         ? "Add at least two photos."
@@ -741,6 +763,25 @@
     updateExportState();
   }
   secsInput.addEventListener("change", renderExport);
+
+  /* ---------- orientation ---------- */
+  var orientBtns = document.querySelectorAll(".orient-seg button");
+  function setOrientation(o) {
+    if (busy || !SIZES[o]) return;
+    var changed = o !== orient;
+    orient = o;
+    SPEC.w = SIZES[o].w;
+    SPEC.h = SIZES[o].h;
+    CROP_ASPECT = SPEC.w / SPEC.h;
+    document.body.classList.toggle("orient-portrait", o === "portrait");
+    Array.prototype.forEach.call(orientBtns, function (b) { b.setAttribute("aria-checked", b.dataset.orient === o); });
+    if (!changed) return;
+    if (video.videoWidth) { zoom = 1; zoomInput.value = 100; zoomValueEl.textContent = "100%"; fitCropToAspect(true); }
+    if (slides.length) renderSlides(); else renderExport();
+  }
+  Array.prototype.forEach.call(orientBtns, function (b) {
+    b.addEventListener("click", function () { setOrientation(b.dataset.orient); });
+  });
 
   /* ---------- modes ---------- */
   function setMode(m) {
@@ -759,7 +800,7 @@
   modeShowBtn.addEventListener("click", function () { setMode("show"); });
 
   /* ---------- labels ---------- */
-  // Geometry at 440 px wide; scales with the output. The .label-preview CSS mirrors these numbers in cqw.
+  // Geometry at a 248 px short side; scales with the output. The .label-preview CSS mirrors it in cqmin.
   var LABEL = { font: 13, padX: 8, padY: 4, margin: 10, radius: 3, lineHeight: 1.25 };
   var LABEL_FONT = '"Space Grotesk", ui-sans-serif, system-ui, sans-serif';
 
@@ -770,7 +811,7 @@
   function drawLabel(ctx, text, W, H) {
     text = (text || "").trim();
     if (!text) return;
-    var k = W / SPEC.w, fs = LABEL.font * k, padX = LABEL.padX * k, padY = LABEL.padY * k, m = LABEL.margin * k;
+    var k = Math.min(W, H) / 248, fs = LABEL.font * k, padX = LABEL.padX * k, padY = LABEL.padY * k, m = LABEL.margin * k;
     ctx.save();
     ctx.font = "600 " + fs + "px " + LABEL_FONT;
     ctx.textBaseline = "middle";
@@ -809,7 +850,7 @@
   var slideSeq = 0, editingId = null;
   var MAX_PHOTO_ZOOM = 3;
 
-  // The part of a photo that fills the 440:248 frame: the largest window at that aspect, shrunk by zoom,
+  // The part of a photo that fills the frame (440:248 or 248:440): the largest window at that aspect, shrunk by zoom,
   // centred on the focal point as far as the photo's edges allow.
   function photoCrop(iw, ih, c) {
     var cw, ch;
@@ -829,7 +870,7 @@
   // Export decodes each original again, one at a time, so zoomed crops stay sharp.
   async function decodePhoto(file) {
     var bmp = await createImageBitmap(file);
-    var scale = Math.max((SPEC.w * 2) / bmp.width, (SPEC.h * 2) / bmp.height);
+    var scale = 880 / Math.min(bmp.width, bmp.height); // fills 880 × 496 or 496 × 880, whichever is asked for later
     if (scale >= 1) return bmp;
     var small = await createImageBitmap(bmp, { resizeWidth: Math.round(bmp.width * scale), resizeHeight: Math.round(bmp.height * scale), resizeQuality: "high" });
     bmp.close();
@@ -888,7 +929,7 @@
     renderSlides();
   }
 
-  // Full photo with a draggable 440:248 window. Click anywhere to centre the window there, drag to fine-tune.
+  // Full photo with the output frame on top. Tap anywhere to set the focal point, drag to fine-tune.
   function buildEditor(s, onChange) {
     var el = document.createElement("div");
     el.className = "slide-editor";
@@ -990,7 +1031,7 @@
       thumb.title = "Set crop and focal point";
       thumb.setAttribute("aria-label", "Crop photo " + (i + 1));
       var tc = document.createElement("canvas");
-      tc.width = 352; tc.height = 198;
+      tc.width = SPEC.w * 0.8; tc.height = SPEC.h * 0.8;
       var tctx = tc.getContext("2d");
       tctx.imageSmoothingQuality = "high";
       function drawThumb() { drawPhoto(tctx, s.bitmap, s.crop, tc.width, tc.height); }
@@ -1153,6 +1194,7 @@
     zoomInput.value = 100;
     zoomValueEl.textContent = "100%";
     frameSection.classList.remove("hidden");
+    setOrientation(video.videoHeight > video.videoWidth ? "portrait" : "landscape"); // match the footage; switchable
     fitCropToAspect(true);
     updateClipUI();
     renderExport();
@@ -1382,6 +1424,7 @@
      modeClipBtn, modeShowBtn, labelInput, labelPosInput, showPosInput, secsInput, transInput].forEach(function (el) { el.disabled = b; });
     slideList.inert = b;
     photoDrop.inert = b;
+    Array.prototype.forEach.call(orientBtns, function (el) { el.disabled = b; });
     updateExportState();
     if (!b) renderExport();
     if (cropBoxEl) cropBoxEl.style.pointerEvents = b ? "none" : "auto";
@@ -1910,10 +1953,10 @@
   // Small JPEG preview for the recent-downloads list.
   function makeThumb(source) {
     var c = document.createElement("canvas");
-    c.width = 176; c.height = 99;
+    c.width = Math.round(SPEC.w * 0.4); c.height = Math.round(SPEC.h * 0.4);
     var x = c.getContext("2d");
     x.imageSmoothingQuality = "high";
-    x.drawImage(source, 0, 0, 176, 99);
+    x.drawImage(source, 0, 0, c.width, c.height);
     return new Promise(function (resolve) { c.toBlob(resolve, "image/jpeg", 0.8); });
   }
 
@@ -2060,7 +2103,7 @@
     var url = URL.createObjectURL(new Blob([u8], { type: "video/mp4" }));
     var played = await probePlayback(url);
     URL.revokeObjectURL(url);
-    var dimsTarget = d.w + " × " + d.h + (d.scale > 1 ? " (2× of 440 × 248)" : "");
+    var dimsTarget = d.w + " × " + d.h + (d.scale > 1 ? " (2× of " + dimsText() + ")" : "");
     var checks = [
       { label: "Dimensions", target: dimsTarget, value: info.w + " × " + info.h, ok: info.w === d.w && info.h === d.h },
       { label: "Duration", target: (+seconds.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - seconds) <= 0.02 },
@@ -2104,8 +2147,8 @@
           var notes = [];
           if (show) notes.push(slides.length + " photos, " + secsInput.value + " s each" + (transInput.value === "fade" ? ", crossfaded" : "") + ".");
           notes.push(d.scale > 1
-            ? "Made at 2× so it stays sharp on high-density screens; embed it at 440 × 248."
-            : "Made at 440 × 248: the framed area doesn't have the detail for 2×, so extra pixels would only add size.");
+            ? "Made at 2× so it stays sharp on high-density screens; embed it at " + dimsText() + "."
+            : "Made at " + dimsText() + ": the framed area doesn't have the detail for 2×, so extra pixels would only add size.");
           if (attempt) notes.push("Quality was eased slightly to fit under 5 MB.");
           showSuccess(
             new Blob([enc.data], { type: "video/mp4" }), report, name, notes.join(" "),
@@ -2186,7 +2229,7 @@
     var dur = info.cs / 100;
     var fps = dur > 0 ? info.frames / dur : 0;
     var checks = [
-      { label: "Dimensions", target: "440 × 248", value: info.w + " × " + info.h, ok: info.w === SPEC.w && info.h === SPEC.h },
+      { label: "Dimensions", target: dimsText(), value: info.w + " × " + info.h, ok: info.w === SPEC.w && info.h === SPEC.h },
       { label: "Duration", target: (+want.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - want) <= 0.02 },
       expect.frames
         ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
@@ -2249,6 +2292,7 @@
     lastMeta = meta || null;
     lastResultURL = URL.createObjectURL(blob);
     lastFilename = filename;
+    resultSection.classList.toggle("result-portrait", SPEC.h > SPEC.w);
     var isVideo = blob.type === "video/mp4";
     resultImg.classList.toggle("hidden", isVideo);
     resultVideo.classList.toggle("hidden", !isVideo);
@@ -2346,9 +2390,9 @@
         if (report.ok) {
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }), report,
-            "loupe-slideshow-" + slides.length + "photos-440x248-" + stamp() + ".gif",
+            "loupe-slideshow-" + slides.length + "photos-" + dimsFile() + "-" + stamp() + ".gif",
             t === 0 ? "" : "With crossfades it came to " + firstMB + " MB, so it uses cuts to fit under 5 MB.",
-            null, { detail: "Slideshow · " + slides.length + " photos · GIF · 440×248 · " + fmtSecs(built.seconds), thumb: built.thumb }
+            null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + dimsText() + " · " + fmtSecs(built.seconds), thumb: built.thumb }
           );
           return;
         }
@@ -2371,10 +2415,10 @@
         if (creport.ok) {
           showSuccess(
             new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }), creport,
-            "loupe-slideshow-" + slides.length + "photos-440x248-" + stamp() + ".gif",
+            "loupe-slideshow-" + slides.length + "photos-" + dimsFile() + "-" + stamp() + ".gif",
             "Uncompressed it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
               describeLevel(level) + "), the lightest step that fits under 5 MB.",
-            null, { detail: "Slideshow · " + slides.length + " photos · GIF · 440×248 · " + fmtSecs(built.seconds) + " · " + level.name.toLowerCase() + " compression", thumb: built.thumb }
+            null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + dimsText() + " · " + fmtSecs(built.seconds) + " · " + level.name.toLowerCase() + " compression", thumb: built.thumb }
           );
           return;
         }
@@ -2420,9 +2464,9 @@
         if (report.ok) {
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }),
-            report, "loupe-clip-440x248-" + tier.fps + "fps-" + stamp() + ".gif",
+            report, "loupe-clip-" + dimsFile() + "-" + tier.fps + "fps-" + stamp() + ".gif",
             ti === 0 ? "" : "At 20 fps it came to " + firstMB + " MB, so it was redone at 12 fps to fit under 5 MB.",
-            null, { detail: "Clip · GIF · 440×248 · " + tier.fps + " fps · 5 s", thumb: captureThumb }
+            null, { detail: "Clip · GIF · " + dimsText() + " · " + tier.fps + " fps · 5 s", thumb: captureThumb }
           );
           return;
         }
@@ -2450,10 +2494,10 @@
         if (creport.ok) {
           showSuccess(
             new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }),
-            creport, "loupe-clip-440x248-" + tier12.fps + "fps-" + stamp() + ".gif",
+            creport, "loupe-clip-" + dimsFile() + "-" + tier12.fps + "fps-" + stamp() + ".gif",
             "Even at 12 fps it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
             describeLevel(level) + "), the lightest step that fits under 5 MB.",
-            null, { detail: "Clip · GIF · 440×248 · 12 fps · 5 s · " + level.name.toLowerCase() + " compression", thumb: captureThumb }
+            null, { detail: "Clip · GIF · " + dimsText() + " · 12 fps · 5 s · " + level.name.toLowerCase() + " compression", thumb: captureThumb }
           );
           return;
         }
