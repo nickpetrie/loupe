@@ -360,7 +360,25 @@
     position: relative; width: 176px; max-width: 100%; aspect-ratio: 440 / 248; overflow: hidden;
     border-radius: 3px; background: #0b0a08;
   }
-  .slide-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  button.slide-thumb { padding: 0; border: none; cursor: pointer; }
+  button.slide-thumb:hover:not(:disabled) { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .slide-thumb canvas { width: 100%; height: 100%; display: block; }
+  .slide-editor { grid-column: 1 / -1; display: grid; gap: 10px; padding-top: 4px; }
+  .crop-stage {
+    position: relative; justify-self: start; max-width: 100%; line-height: 0; overflow: hidden;
+    border-radius: 3px; background: #0b0a08; cursor: crosshair; touch-action: none; user-select: none;
+  }
+  .crop-stage img { display: block; max-width: 100%; max-height: 380px; width: auto; height: auto; pointer-events: none; }
+  .photo-crop {
+    position: absolute; border: 1.5px solid var(--accent); box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    cursor: move; line-height: normal;
+  }
+  .photo-crop::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px;
+    border: 1.5px solid var(--accent); border-radius: 50%; pointer-events: none;
+  }
+  .editor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+  .editor-controls .zoom-group { flex: 1 1 220px; }
   .slide-fields { display: grid; gap: 6px; min-width: 0; }
   .slide-name { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .slide-actions { display: flex; gap: 4px; }
@@ -477,7 +495,7 @@
     <div class="photo-drop" id="photoDrop" tabindex="0" role="button" aria-label="Add photos">
       <div class="drop-copy">
         <p class="big">Drop photos here, or click to add them</p>
-        <p class="small mono">JPG · PNG · WebP — cropped to fill 440:248 from the centre. Location and camera data are not carried into the export.</p>
+        <p class="small mono">JPG · PNG · WebP — click a photo to choose what stays in frame. Location and camera data are not carried into the export.</p>
       </div>
     </div>
     <ul class="slides" id="slideList"></ul>
@@ -799,10 +817,34 @@
   applyLabelPos();
 
   /* ---------- slideshow photos ---------- */
-  var slideSeq = 0;
+  var slideSeq = 0, editingId = null;
+  var MAX_PHOTO_ZOOM = 3;
+
+  // The part of a photo that fills the 440:248 frame: the largest window at that aspect, shrunk by zoom,
+  // centred on the focal point as far as the photo's edges allow.
+  function photoCrop(iw, ih, c) {
+    var cw, ch;
+    if (iw / ih > CROP_ASPECT) { ch = ih; cw = ih * CROP_ASPECT; } else { cw = iw; ch = iw / CROP_ASPECT; }
+    cw /= c.z; ch /= c.z;
+    var sx = Math.min(Math.max(c.cx * iw - cw / 2, 0), iw - cw);
+    var sy = Math.min(Math.max(c.cy * ih - ch / 2, 0), ih - ch);
+    return { sx: sx, sy: sy, sw: cw, sh: ch };
+  }
+  // Pull the focal point back inside the reachable range, so dragging past an edge doesn't build up slack.
+  function clampFocus(s) {
+    var iw = s.bitmap.width, ih = s.bitmap.height, r = photoCrop(iw, ih, s.crop);
+    s.crop.cx = (r.sx + r.sw / 2) / iw;
+    s.crop.cy = (r.sy + r.sh / 2) / ih;
+    return r;
+  }
+  function drawPhoto(ctx, img, c, W, H) {
+    var r = photoCrop(img.width, img.height, c);
+    ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+  }
   var MAX_SLIDES = 30;
 
-  // Decode once and keep a copy just big enough to fill 880 × 496, so 30 full-size photos don't eat memory.
+  // On-screen previews use a copy just big enough to fill 880 × 496, so 30 full-size photos don't eat memory.
+  // Export decodes each original again, one at a time, so zoomed crops stay sharp.
   async function decodePhoto(file) {
     var bmp = await createImageBitmap(file);
     var scale = Math.max((SPEC.w * 2) / bmp.width, (SPEC.h * 2) / bmp.height);
@@ -819,7 +861,7 @@
       if (slides.length >= MAX_SLIDES) { skipped = list.length - i; break; }
       try {
         var bmp = await decodePhoto(list[i]);
-        slides.push({ id: ++slideSeq, name: list[i].name, url: URL.createObjectURL(list[i]), bitmap: bmp, label: "" });
+        slides.push({ id: ++slideSeq, name: list[i].name, file: list[i], url: URL.createObjectURL(list[i]), bitmap: bmp, label: "", crop: { cx: 0.5, cy: 0.5, z: 1 } });
       } catch (e) { failed.push(list[i].name); }
     }
     renderSlides();
@@ -846,6 +888,7 @@
     if (i < 0) return;
     URL.revokeObjectURL(slides[i].url);
     slides[i].bitmap.close();
+    if (editingId === id) editingId = null;
     slides.splice(i, 1);
     renderSlides();
   }
@@ -858,6 +901,98 @@
     return b;
   }
 
+  function toggleEditor(id) {
+    editingId = editingId === id ? null : id;
+    renderSlides();
+  }
+
+  // Full photo with a draggable 440:248 window. Click anywhere to centre the window there, drag to fine-tune.
+  function buildEditor(s, onChange) {
+    var el = document.createElement("div");
+    el.className = "slide-editor";
+    var stage = document.createElement("div");
+    stage.className = "crop-stage";
+    var img = document.createElement("img");
+    img.src = s.url; img.alt = ""; img.draggable = false;
+    var box = document.createElement("div");
+    box.className = "photo-crop label-host";
+    var label = document.createElement("span");
+    label.className = "label-preview";
+    label.textContent = s.label.trim();
+    box.appendChild(label);
+    stage.appendChild(img); stage.appendChild(box);
+
+    function place() {
+      var iw = s.bitmap.width, ih = s.bitmap.height, r = clampFocus(s);
+      box.style.left = (r.sx / iw * 100) + "%";
+      box.style.top = (r.sy / ih * 100) + "%";
+      box.style.width = (r.sw / iw * 100) + "%";
+      box.style.height = (r.sh / ih * 100) + "%";
+      onChange();
+    }
+
+    var drag = null;
+    stage.addEventListener("pointerdown", function (e) {
+      var rect = stage.getBoundingClientRect();
+      if (e.target !== box) { // jump: centre the window on the click
+        s.crop.cx = (e.clientX - rect.left) / rect.width;
+        s.crop.cy = (e.clientY - rect.top) / rect.height;
+        place();
+      }
+      drag = { px: e.clientX, py: e.clientY, cx: s.crop.cx, cy: s.crop.cy, w: rect.width, h: rect.height };
+      stage.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    stage.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      s.crop.cx = drag.cx + (e.clientX - drag.px) / drag.w;
+      s.crop.cy = drag.cy + (e.clientY - drag.py) / drag.h;
+      place();
+    });
+    stage.addEventListener("pointerup", function () { drag = null; });
+    stage.addEventListener("pointercancel", function () { drag = null; });
+
+    var controls = document.createElement("div");
+    controls.className = "editor-controls";
+    var zg = document.createElement("div");
+    zg.className = "zoom-group";
+    var zl = document.createElement("span");
+    zl.className = "crop-label mono"; zl.textContent = "Zoom";
+    var zoomIn = document.createElement("input");
+    zoomIn.type = "range"; zoomIn.min = 100; zoomIn.max = MAX_PHOTO_ZOOM * 100; zoomIn.step = 5;
+    zoomIn.id = "photoZoom" + s.id;
+    zoomIn.value = Math.round(s.crop.z * 100);
+    zoomIn.setAttribute("aria-label", "Zoom");
+    var zv = document.createElement("span");
+    zv.className = "zoom-value mono"; zv.textContent = zoomIn.value + "%";
+    zoomIn.addEventListener("input", function () {
+      s.crop.z = parseInt(zoomIn.value, 10) / 100;
+      zv.textContent = zoomIn.value + "%";
+      place();
+    });
+    zg.appendChild(zl); zg.appendChild(zoomIn); zg.appendChild(zv);
+    var reset = document.createElement("button");
+    reset.type = "button"; reset.className = "ghost"; reset.textContent = "Reset";
+    reset.addEventListener("click", function () {
+      s.crop = { cx: 0.5, cy: 0.5, z: 1 };
+      zoomIn.value = 100; zv.textContent = "100%";
+      place();
+    });
+    var done = document.createElement("button");
+    done.type = "button"; done.textContent = "Done";
+    done.addEventListener("click", function () { toggleEditor(s.id); });
+    controls.appendChild(zg); controls.appendChild(reset); controls.appendChild(done);
+
+    var hint = document.createElement("p");
+    hint.className = "hint";
+    hint.style.margin = "0";
+    hint.textContent = "Click the part of the photo that matters, or drag the box. The box is exactly what appears in the slideshow; zoom in to frame a detail.";
+
+    el.appendChild(stage); el.appendChild(controls); el.appendChild(hint);
+    if (img.complete) place(); else img.addEventListener("load", place);
+    return { el: el, label: label };
+  }
+
   function renderSlides() {
     slideList.innerHTML = "";
     slides.forEach(function (s, i) {
@@ -866,14 +1001,22 @@
       var num = document.createElement("span");
       num.className = "slide-num mono";
       num.textContent = i + 1;
-      var thumb = document.createElement("div");
+      var thumb = document.createElement("button");
+      thumb.type = "button";
       thumb.className = "slide-thumb label-host";
-      var img = document.createElement("img");
-      img.src = s.url; img.alt = s.name;
+      thumb.title = "Set crop and focal point";
+      thumb.setAttribute("aria-label", "Crop photo " + (i + 1));
+      var tc = document.createElement("canvas");
+      tc.width = 352; tc.height = 198;
+      var tctx = tc.getContext("2d");
+      tctx.imageSmoothingQuality = "high";
+      function drawThumb() { drawPhoto(tctx, s.bitmap, s.crop, tc.width, tc.height); }
+      drawThumb();
       var prev = document.createElement("span");
       prev.className = "label-preview";
       prev.textContent = s.label.trim();
-      thumb.appendChild(img); thumb.appendChild(prev);
+      thumb.appendChild(tc); thumb.appendChild(prev);
+      thumb.addEventListener("click", function () { toggleEditor(s.id); });
 
       var fields = document.createElement("div");
       fields.className = "slide-fields";
@@ -883,18 +1026,33 @@
       input.placeholder = "Label, e.g. Place de la République · Photo: AFP";
       input.setAttribute("aria-label", "Label for photo " + (i + 1));
       input.value = s.label;
-      input.addEventListener("input", function () { s.label = input.value; prev.textContent = input.value.trim(); });
+      var editorLabel = null;
+      input.addEventListener("input", function () {
+        s.label = input.value;
+        prev.textContent = input.value.trim();
+        if (editorLabel) editorLabel.textContent = input.value.trim();
+      });
       var name = document.createElement("span");
       name.className = "slide-name mono"; name.textContent = s.name;
       fields.appendChild(input); fields.appendChild(name);
 
       var actions = document.createElement("div");
       actions.className = "slide-actions";
+      var cropBtn = iconBtn("Crop", "Set crop and focal point", function () { toggleEditor(s.id); });
+      cropBtn.style.width = "auto";
+      cropBtn.style.padding = "6px 9px";
+      cropBtn.setAttribute("aria-expanded", editingId === s.id);
+      actions.appendChild(cropBtn);
       actions.appendChild(iconBtn("↑", "Move up", function () { moveSlide(s.id, -1); }, i === 0));
       actions.appendChild(iconBtn("↓", "Move down", function () { moveSlide(s.id, 1); }, i === slides.length - 1));
       actions.appendChild(iconBtn("✕", "Remove photo", function () { removeSlide(s.id); }));
 
       li.appendChild(num); li.appendChild(thumb); li.appendChild(fields); li.appendChild(actions);
+      if (editingId === s.id) {
+        var ed = buildEditor(s, drawThumb);
+        editorLabel = ed.label;
+        li.appendChild(ed.el);
+      }
       slideList.appendChild(li);
     });
     photoDrop.classList.toggle("compact", slides.length > 0);
@@ -1681,11 +1839,6 @@
     }
   }
 
-  function drawCover(ctx, img, W, H) {
-    var s = Math.max(W / img.width, H / img.height), w = img.width * s, h = img.height * s;
-    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
-  }
-
   // Slideshow: every photo is pre-rendered with its label, then held (or crossfaded) frame by frame.
   // The last photo fades back into the first, so the loop has no seam.
   async function renderSlideshowMp4(d, bitrate, prefix) {
@@ -1702,12 +1855,16 @@
       x.imageSmoothingQuality = "high";
       return { c: c, x: x };
     }
-    var cards = slides.map(function (s) {
-      var k = canvas();
-      drawCover(k.x, s.bitmap, d.w, d.h);
+    var cards = [];
+    for (var c = 0; c < n; c++) {
+      var s = slides[c], k = canvas(), full = null;
+      setProgress(0.05 * c / n, prefix + "preparing photo " + (c + 1) + " of " + n);
+      try { full = await createImageBitmap(s.file); } catch (e) { /* fall back to the preview copy */ }
+      drawPhoto(k.x, full || s.bitmap, s.crop, d.w, d.h);
+      if (full) full.close();
       drawLabel(k.x, s.label, d.w, d.h);
-      return k.c;
-    });
+      cards.push(k.c);
+    }
     var mix = canvas();
 
     var enc = await openMp4Encoder(d, bitrate, total);
@@ -1726,7 +1883,7 @@
         }
         await enc.drain();
         if (i % 15 === 14) {
-          setProgress(0.95 * (i + 1) / total, prefix + "frame " + (i + 1) + " of " + total);
+          setProgress(0.05 + 0.9 * (i + 1) / total, prefix + "frame " + (i + 1) + " of " + total);
           await tick();
         }
       }

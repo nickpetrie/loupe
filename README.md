@@ -8,7 +8,7 @@ Turn a 5-second stretch of video, or a set of photos, into a looping MP4 or GIF 
 - MP4 (default where supported): H.264, 30 fps, 440×248 or 880×496 (2×), Compact / Balanced / High. Captured in one real-time playthrough, so export takes about 5 s.
 - GIF: 20 fps, then 12 fps, then stepped compression until it fits under 5 MB.
 
-**Photo slideshow.** Add up to 30 photos, give each a label, reorder, choose seconds per photo and cut or crossfade. Exports a seamless looping MP4 (the last photo fades back into the first). Photos are cropped to fill 440:248 from the centre.
+**Photo slideshow.** Add up to 30 photos, give each a label, reorder, choose seconds per photo and cut or crossfade. Exports a seamless looping MP4 (the last photo fades back into the first). Click a photo to set its crop: click or drag to choose the focal point, zoom up to 300% to frame a detail. Export re-reads each original at full resolution, so zoomed crops stay sharp.
 
 **Labels.** Credit or location text burned into the frames, in any corner. The on-screen previews use the same geometry as the export.
 
