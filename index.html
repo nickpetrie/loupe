@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Loupe — 5-second GIF, made to spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    /* daylight desk — light default */
+    --bg: #EFE9DB;
+    --surface: #FBF9F3;
+    --surface-2: #E4DCC7;
+    --border: #CBBFA0;
+    --text: #221E16;
+    --text-muted: #756B57;
+    --accent: #B85C1F;
+    --accent-soft: #E9CBA8;
+    --accent-contrast: #FBF9F3;
+    --danger: #A23B2E;
+    --success: #2F7A44;
+    --focus: #2E6E8E;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #15130F;
+      --surface: #1E1B16;
+      --surface-2: #29251E;
+      --border: #3B362C;
+      --text: #F1EBDE;
+      --text-muted: #9C9280;
+      --accent: #E3A857;
+      --accent-soft: #4A3C24;
+      --accent-contrast: #15130F;
+      --danger: #E2735F;
+      --success: #7FC494;
+      --focus: #6FB5D6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #15130F;
+    --surface: #1E1B16;
+    --surface-2: #29251E;
+    --border: #3B362C;
+    --text: #F1EBDE;
+    --text-muted: #9C9280;
+    --accent: #E3A857;
+    --accent-soft: #4A3C24;
+    --accent-contrast: #15130F;
+    --danger: #E2735F;
+    --success: #7FC494;
+    --focus: #6FB5D6;
+  }
+
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); height: 100%; }
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+
+  .app { max-width: 880px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  /* ---------- header ---------- */
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 22px; letter-spacing: 0.01em;
+  }
+  .brand-mark {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .brand-mark::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .tagline { margin: 0; color: var(--text-muted); font-size: 14px; max-width: 40ch; }
+  .theme-toggle {
+    border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
+    border-radius: 999px; padding: 6px 12px; font-size: 12px;
+    font-family: "IBM Plex Mono", monospace; cursor: pointer;
+  }
+  .theme-toggle:hover { color: var(--text); border-color: var(--accent); }
+
+  .spec-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 28px; }
+  .spec {
+    border: 1px solid var(--border); background: var(--surface);
+    border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-muted);
+  }
+  .spec b { color: var(--text); font-weight: 500; }
+
+  section { margin-bottom: 34px; }
+  h2 {
+    font-size: 13px; letter-spacing: 0.03em;
+    font-family: "IBM Plex Mono", monospace; font-weight: 500;
+    color: var(--text-muted); margin: 0 0 12px;
+  }
+
+  /* ---------- drop zone / stage ---------- */
+  .stage {
+    border: 1.5px dashed var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    min-height: 220px;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 28px; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .stage.drag-over { border-color: var(--accent); background: var(--accent-soft); }
+  .stage.has-video { cursor: default; padding: 0; overflow: hidden; display: block; border-style: solid; }
+  .drop-copy p { margin: 0 0 6px; }
+  .drop-copy .big { font-size: 16px; font-weight: 500; }
+  .drop-copy .small { font-size: 13px; color: var(--text-muted); }
+
+  .player-wrap {
+    background: #0b0a08;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  video { width: 100%; max-height: 460px; display: block; background: #0b0a08; }
+
+  /* ---------- crop overlay ---------- */
+  .crop-box {
+    position: absolute;
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    border: 1.5px solid var(--accent);
+    cursor: move; touch-action: none;
+  }
+  .crop-box .crop-dims {
+    position: absolute; top: -22px; left: 0;
+    font-size: 11px; color: var(--accent-contrast); background: var(--accent);
+    padding: 2px 6px; border-radius: 3px;
+    font-family: "IBM Plex Mono", monospace; white-space: nowrap;
+  }
+  .crop-zoom-guide {
+    position: absolute; border: 1px dashed rgba(255,255,255,0.85);
+    pointer-events: none; display: none;
+  }
+  .crop-handle {
+    position: absolute; right: -7px; bottom: -7px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--accent); border: 2px solid var(--accent-contrast);
+    cursor: nwse-resize; touch-action: none;
+  }
+
+  .transport {
+    background: var(--surface);
+    border: 1px solid var(--border); border-top: none;
+    border-radius: 0 0 6px 6px;
+    padding: 12px 14px 16px;
+  }
+  .scrub-row { display: flex; align-items: center; gap: 10px; }
+  .scrub-track { position: relative; flex: 1; display: flex; align-items: center; }
+  .scrub-track input[type="range"] { width: 100%; }
+  .clip-range {
+    position: absolute; top: 50%; height: 6px; transform: translateY(-50%);
+    background: var(--accent); opacity: 0.6; border-radius: 999px; pointer-events: none;
+  }
+  .time-readout { font-size: 12px; color: var(--text-muted); white-space: nowrap; min-width: 92px; text-align: right; }
+  .time-readout .current { color: var(--text); }
+
+  .transport-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  .marks { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+  .marks .set { color: var(--text); }
+
+  button {
+    font-family: inherit; font-size: 13px; border-radius: 4px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+    padding: 8px 13px; cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.primary {
+    background: var(--accent); border-color: var(--accent);
+    color: var(--accent-contrast); font-weight: 500;
+  }
+  button.primary:hover:not(:disabled) { color: var(--accent-contrast); filter: brightness(1.08); }
+  button.ghost { background: transparent; }
+  button.icon-btn { width: 34px; padding: 8px 0; text-align: center; }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    height: 4px; background: var(--border); border-radius: 999px; outline: none;
+  }
+  input[type="range"]:disabled { opacity: 0.5; }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    border: 2px solid var(--surface); box-shadow: 0 0 0 1px var(--accent);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--accent); cursor: pointer; border: 2px solid var(--surface);
+  }
+
+  .hint { font-size: 12.5px; color: var(--text-muted); margin: 10px 2px 0; }
+  .msg { font-size: 12.5px; padding: 8px 10px; border-radius: 4px; margin-top: 10px; display: none; }
+  .msg.show { display: block; }
+  .msg.warn { background: var(--accent-soft); color: var(--text); border: 1px solid var(--border); }
+  .msg.err { border: 1px solid var(--danger); color: var(--text); }
+
+  /* ---------- framing ---------- */
+  .crop-controls {
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+    border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface); padding: 14px 16px;
+  }
+  .crop-label { color: var(--text-muted); font-size: 11.5px; }
+  .zoom-group { display: flex; align-items: center; gap: 10px; flex: 1 1 260px; min-width: 200px; }
+  .zoom-group input[type="range"] { flex: 1; }
+  .zoom-value { color: var(--text); min-width: 40px; text-align: right; font-size: 12px; }
+
+  /* ---------- export ---------- */
+  .generate-row { display: flex; align-items: center; gap: 14px; }
+  .progress-track {
+    flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2);
+    overflow: hidden; visibility: hidden;
+  }
+  .progress-track.show { visibility: visible; }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
+  .progress-label { font-size: 12px; color: var(--text-muted); margin-top: 8px; min-height: 18px; }
+  .option-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 14px; font-size: 13px; cursor: pointer;
+  }
+  .option-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+
+  /* ---------- result ---------- */
+  .result-shell {
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    padding: 18px; display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-start;
+  }
+  .result-shell img {
+    width: 440px; max-width: 100%; height: auto; aspect-ratio: 440 / 248;
+    border-radius: 4px; border: 1px solid var(--border); background: #0b0a08;
+  }
+  .result-meta { flex: 1; min-width: 240px; }
+  .checklist { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 7px; font-size: 13px; }
+  .checklist li { display: flex; gap: 8px; align-items: baseline; }
+  .checklist .mark { font-family: "IBM Plex Mono", monospace; font-weight: 600; width: 14px; flex-shrink: 0; }
+  .checklist li.ok .mark { color: var(--success); }
+  .checklist li.bad .mark { color: var(--danger); }
+  .checklist .target { color: var(--text-muted); }
+  .checklist .val { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; }
+  .checklist li.bad .val { color: var(--danger); }
+  .result-note { font-size: 12.5px; color: var(--text-muted); margin-bottom: 14px; }
+
+  .download-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: var(--accent-contrast);
+    padding: 10px 16px; border-radius: 4px; font-weight: 500; font-size: 13px;
+    border: 1px solid var(--accent); cursor: pointer;
+  }
+  .download-btn:hover:not(:disabled) { filter: brightness(1.08); color: var(--accent-contrast); }
+
+  .hidden { display: none !important; }
+
+  footer {
+    margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  @media (max-width: 560px) {
+    .marks { margin-left: 0; width: 100%; order: 10; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div>
+      <div class="brand"><span class="brand-mark"></span>LOUPE</div>
+      <p class="tagline">Pick a 5-second stretch of video and get a GIF that already meets the spec.</p>
+    </div>
+    <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
+  </header>
+
+  <div class="spec-strip mono" aria-label="Export specs">
+    <span class="spec"><b>440 × 248</b> px</span>
+    <span class="spec"><b>5</b> seconds</span>
+    <span class="spec"><b>20</b> fps, <b>12</b> if needed</span>
+    <span class="spec"><b>under 5</b> MB</span>
+  </div>
+
+  <input type="file" id="fileInput" accept="video/*" class="hidden">
+
+  <section>
+    <div class="stage" id="dropzone">
+      <div class="drop-copy">
+        <p class="big">Drop a video here, or click to choose a file</p>
+        <p class="small mono">MP4 · WebM · MOV — stays in your browser, never uploaded</p>
+      </div>
+    </div>
+
+    <div class="transport hidden" id="transport">
+      <div class="scrub-row">
+        <div class="scrub-track">
+          <input type="range" id="scrub" min="0" max="0" value="0" step="0.001">
+          <div class="clip-range" id="clipRange"></div>
+        </div>
+        <div class="time-readout mono"><span class="current" id="curTime">0:00.0</span> / <span id="durTime">0:00.0</span></div>
+      </div>
+      <div class="transport-actions">
+        <button class="icon-btn" id="playBtn" type="button" title="Play / pause">▶</button>
+        <button class="primary" id="setStartBtn" type="button">Start clip here</button>
+        <button id="previewBtn" type="button">Preview 5 s</button>
+        <button class="ghost" id="changeBtn" type="button">Change video</button>
+        <div class="marks mono" id="clipLabel">clip 0:00.0 → 0:05.0</div>
+      </div>
+      <div class="msg warn" id="transportMsg"></div>
+      <div class="msg err" id="lengthWarn"></div>
+    </div>
+  </section>
+
+  <section id="frameSection" class="hidden">
+    <h2>Frame it</h2>
+    <div class="crop-controls">
+      <div class="zoom-group">
+        <span class="crop-label mono">Zoom</span>
+        <input type="range" id="zoomInput" min="100" max="400" value="100" step="5">
+        <span class="zoom-value mono" id="zoomValue">100%</span>
+      </div>
+      <button class="ghost" id="resetFrameBtn" type="button">Reset framing</button>
+    </div>
+    <p class="hint">The amber box is locked to 440:248 (about 16:9), so nothing gets stretched. Drag it to reposition, drag the handle to resize. On a vertical clip with black bars down the sides, push <strong>Zoom</strong> up until the dashed inner line clears them — that line is exactly what ends up in the GIF.</p>
+  </section>
+
+  <section id="exportSection" class="hidden">
+    <h2>Export</h2>
+    <div class="generate-row">
+      <button class="primary" id="exportBtn" type="button">Export GIF</button>
+      <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+    <div class="progress-label mono" id="progressLabel"></div>
+    <label class="option-row">
+      <input type="checkbox" id="autoCompressInput" checked>
+      <span>Auto-compress if the file is still over 5 MB at 12 fps</span>
+    </label>
+    <p class="hint">Exports try 20 fps first, then 12 fps. If it's still over 5 MB, the footage is compressed in steps — Light, Medium, Strong, Heavy, Maximum — stopping at the lightest step that fits. Compression is lossy (fewer colors, and pixels that barely changed are reused from the previous frame), but size, duration and frame rate never change. Every result is checked against the spec before download is offered.</p>
+  </section>
+
+  <section id="resultSection" class="hidden">
+    <h2>Result</h2>
+    <div class="result-shell">
+      <img id="resultImg" alt="Generated GIF preview">
+      <div class="result-meta">
+        <ul class="checklist" id="checklist"></ul>
+        <div class="result-note" id="resultNote"></div>
+        <button class="download-btn mono" id="downloadBtn" type="button">Download GIF ↓</button>
+        <div class="hint" id="downloadHint" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Everything happens locally in your browser — the video and generated GIF are never sent anywhere.
+  </footer>
+</div>
+
+<!-- gif.js 0.2.0 (MIT) — https://github.com/jnordberg/gif.js — embedded so the tool is self-contained -->
+<script>
+
+// gif.js 0.2.0 - https://github.com/jnordberg/gif.js
+(function(f){if(typeof exports==="object"&&typeof module!=="undefined"){module.exports=f()}else if(typeof define==="function"&&define.amd){define([],f)}else{var g;if(typeof window!=="undefined"){g=window}else if(typeof global!=="undefined"){g=global}else if(typeof self!=="undefined"){g=self}else{g=this}g.GIF=f()}})(function(){var define,module,exports;return function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s}({1:[function(require,module,exports){function EventEmitter(){this._events=this._events||{};this._maxListeners=this._maxListeners||undefined}module.exports=EventEmitter;EventEmitter.EventEmitter=EventEmitter;EventEmitter.prototype._events=undefined;EventEmitter.prototype._maxListeners=undefined;EventEmitter.defaultMaxListeners=10;EventEmitter.prototype.setMaxListeners=function(n){if(!isNumber(n)||n<0||isNaN(n))throw TypeError("n must be a positive number");this._maxListeners=n;return this};EventEmitter.prototype.emit=function(type){var er,handler,len,args,i,listeners;if(!this._events)this._events={};if(type==="error"){if(!this._events.error||isObject(this._events.error)&&!this._events.error.length){er=arguments[1];if(er instanceof Error){throw er}else{var err=new Error('Uncaught, unspecified "error" event. ('+er+")");err.context=er;throw err}}}handler=this._events[type];if(isUndefined(handler))return false;if(isFunction(handler)){switch(arguments.length){case 1:handler.call(this);break;case 2:handler.call(this,arguments[1]);break;case 3:handler.call(this,arguments[1],arguments[2]);break;default:args=Array.prototype.slice.call(arguments,1);handler.apply(this,args)}}else if(isObject(handler)){args=Array.prototype.slice.call(arguments,1);listeners=handler.slice();len=listeners.length;for(i=0;i<len;i++)listeners[i].apply(this,args)}return true};EventEmitter.prototype.addListener=function(type,listener){var m;if(!isFunction(listener))throw TypeError("listener must be a function");if(!this._events)this._events={};if(this._events.newListener)this.emit("newListener",type,isFunction(listener.listener)?listener.listener:listener);if(!this._events[type])this._events[type]=listener;else if(isObject(this._events[type]))this._events[type].push(listener);else this._events[type]=[this._events[type],listener];if(isObject(this._events[type])&&!this._events[type].warned){if(!isUndefined(this._maxListeners)){m=this._maxListeners}else{m=EventEmitter.defaultMaxListeners}if(m&&m>0&&this._events[type].length>m){this._events[type].warned=true;console.error("(node) warning: possible EventEmitter memory "+"leak detected. %d listeners added. "+"Use emitter.setMaxListeners() to increase limit.",this._events[type].length);if(typeof console.trace==="function"){console.trace()}}}return this};EventEmitter.prototype.on=EventEmitter.prototype.addListener;EventEmitter.prototype.once=function(type,listener){if(!isFunction(listener))throw TypeError("listener must be a function");var fired=false;function g(){this.removeListener(type,g);if(!fired){fired=true;listener.apply(this,arguments)}}g.listener=listener;this.on(type,g);return this};EventEmitter.prototype.removeListener=function(type,listener){var list,position,length,i;if(!isFunction(listener))throw TypeError("listener must be a function");if(!this._events||!this._events[type])return this;list=this._events[type];length=list.length;position=-1;if(list===listener||isFunction(list.listener)&&list.listener===listener){delete this._events[type];if(this._events.removeListener)this.emit("removeListener",type,listener)}else if(isObject(list)){for(i=length;i-- >0;){if(list[i]===listener||list[i].listener&&list[i].listener===listener){position=i;break}}if(position<0)return this;if(list.length===1){list.length=0;delete this._events[type]}else{list.splice(position,1)}if(this._events.removeListener)this.emit("removeListener",type,listener)}return this};EventEmitter.prototype.removeAllListeners=function(type){var key,listeners;if(!this._events)return this;if(!this._events.removeListener){if(arguments.length===0)this._events={};else if(this._events[type])delete this._events[type];return this}if(arguments.length===0){for(key in this._events){if(key==="removeListener")continue;this.removeAllListeners(key)}this.removeAllListeners("removeListener");this._events={};return this}listeners=this._events[type];if(isFunction(listeners)){this.removeListener(type,listeners)}else if(listeners){while(listeners.length)this.removeListener(type,listeners[listeners.length-1])}delete this._events[type];return this};EventEmitter.prototype.listeners=function(type){var ret;if(!this._events||!this._events[type])ret=[];else if(isFunction(this._events[type]))ret=[this._events[type]];else ret=this._events[type].slice();return ret};EventEmitter.prototype.listenerCount=function(type){if(this._events){var evlistener=this._events[type];if(isFunction(evlistener))return 1;else if(evlistener)return evlistener.length}return 0};EventEmitter.listenerCount=function(emitter,type){return emitter.listenerCount(type)};function isFunction(arg){return typeof arg==="function"}function isNumber(arg){return typeof arg==="number"}function isObject(arg){return typeof arg==="object"&&arg!==null}function isUndefined(arg){return arg===void 0}},{}],2:[function(require,module,exports){var UA,browser,mode,platform,ua;ua=navigator.userAgent.toLowerCase();platform=navigator.platform.toLowerCase();UA=ua.match(/(opera|ie|firefox|chrome|version)[\s\/:]([\w\d\.]+)?.*?(safari|version[\s\/:]([\w\d\.]+)|$)/)||[null,"unknown",0];mode=UA[1]==="ie"&&document.documentMode;browser={name:UA[1]==="version"?UA[3]:UA[1],version:mode||parseFloat(UA[1]==="opera"&&UA[4]?UA[4]:UA[2]),platform:{name:ua.match(/ip(?:ad|od|hone)/)?"ios":(ua.match(/(?:webos|android)/)||platform.match(/mac|win|linux/)||["other"])[0]}};browser[browser.name]=true;browser[browser.name+parseInt(browser.version,10)]=true;browser.platform[browser.platform.name]=true;module.exports=browser},{}],3:[function(require,module,exports){var EventEmitter,GIF,browser,extend=function(child,parent){for(var key in parent){if(hasProp.call(parent,key))child[key]=parent[key]}function ctor(){this.constructor=child}ctor.prototype=parent.prototype;child.prototype=new ctor;child.__super__=parent.prototype;return child},hasProp={}.hasOwnProperty,indexOf=[].indexOf||function(item){for(var i=0,l=this.length;i<l;i++){if(i in this&&this[i]===item)return i}return-1},slice=[].slice;EventEmitter=require("events").EventEmitter;browser=require("./browser.coffee");GIF=function(superClass){var defaults,frameDefaults;extend(GIF,superClass);defaults={workerScript:"gif.worker.js",workers:2,repeat:0,background:"#fff",quality:10,width:null,height:null,transparent:null,debug:false,dither:false};frameDefaults={delay:500,copy:false};function GIF(options){var base,key,value;this.running=false;this.options={};this.frames=[];this.freeWorkers=[];this.activeWorkers=[];this.setOptions(options);for(key in defaults){value=defaults[key];if((base=this.options)[key]==null){base[key]=value}}}GIF.prototype.setOption=function(key,value){this.options[key]=value;if(this._canvas!=null&&(key==="width"||key==="height")){return this._canvas[key]=value}};GIF.prototype.setOptions=function(options){var key,results,value;results=[];for(key in options){if(!hasProp.call(options,key))continue;value=options[key];results.push(this.setOption(key,value))}return results};GIF.prototype.addFrame=function(image,options){var frame,key;if(options==null){options={}}frame={};frame.transparent=this.options.transparent;for(key in frameDefaults){frame[key]=options[key]||frameDefaults[key]}if(this.options.width==null){this.setOption("width",image.width)}if(this.options.height==null){this.setOption("height",image.height)}if(typeof ImageData!=="undefined"&&ImageData!==null&&image instanceof ImageData){frame.data=image.data}else if(typeof CanvasRenderingContext2D!=="undefined"&&CanvasRenderingContext2D!==null&&image instanceof CanvasRenderingContext2D||typeof WebGLRenderingContext!=="undefined"&&WebGLRenderingContext!==null&&image instanceof WebGLRenderingContext){if(options.copy){frame.data=this.getContextData(image)}else{frame.context=image}}else if(image.childNodes!=null){if(options.copy){frame.data=this.getImageData(image)}else{frame.image=image}}else{throw new Error("Invalid image")}return this.frames.push(frame)};GIF.prototype.render=function(){var i,j,numWorkers,ref;if(this.running){throw new Error("Already running")}if(this.options.width==null||this.options.height==null){throw new Error("Width and height must be set prior to rendering")}this.running=true;this.nextFrame=0;this.finishedFrames=0;this.imageParts=function(){var j,ref,results;results=[];for(i=j=0,ref=this.frames.length;0<=ref?j<ref:j>ref;i=0<=ref?++j:--j){results.push(null)}return results}.call(this);numWorkers=this.spawnWorkers();if(this.options.globalPalette===true){this.renderNextFrame()}else{for(i=j=0,ref=numWorkers;0<=ref?j<ref:j>ref;i=0<=ref?++j:--j){this.renderNextFrame()}}this.emit("start");return this.emit("progress",0)};GIF.prototype.abort=function(){var worker;while(true){worker=this.activeWorkers.shift();if(worker==null){break}this.log("killing active worker");worker.terminate()}this.running=false;return this.emit("abort")};GIF.prototype.spawnWorkers=function(){var j,numWorkers,ref,results;numWorkers=Math.min(this.options.workers,this.frames.length);(function(){results=[];for(var j=ref=this.freeWorkers.length;ref<=numWorkers?j<numWorkers:j>numWorkers;ref<=numWorkers?j++:j--){results.push(j)}return results}).apply(this).forEach(function(_this){return function(i){var worker;_this.log("spawning worker "+i);worker=new Worker(_this.options.workerScript);worker.onmessage=function(event){_this.activeWorkers.splice(_this.activeWorkers.indexOf(worker),1);_this.freeWorkers.push(worker);return _this.frameFinished(event.data)};return _this.freeWorkers.push(worker)}}(this));return numWorkers};GIF.prototype.frameFinished=function(frame){var i,j,ref;this.log("frame "+frame.index+" finished - "+this.activeWorkers.length+" active");this.finishedFrames++;this.emit("progress",this.finishedFrames/this.frames.length);this.imageParts[frame.index]=frame;if(this.options.globalPalette===true){this.options.globalPalette=frame.globalPalette;this.log("global palette analyzed");if(this.frames.length>2){for(i=j=1,ref=this.freeWorkers.length;1<=ref?j<ref:j>ref;i=1<=ref?++j:--j){this.renderNextFrame()}}}if(indexOf.call(this.imageParts,null)>=0){return this.renderNextFrame()}else{return this.finishRendering()}};GIF.prototype.finishRendering=function(){var data,frame,i,image,j,k,l,len,len1,len2,len3,offset,page,ref,ref1,ref2;len=0;ref=this.imageParts;for(j=0,len1=ref.length;j<len1;j++){frame=ref[j];len+=(frame.data.length-1)*frame.pageSize+frame.cursor}len+=frame.pageSize-frame.cursor;this.log("rendering finished - filesize "+Math.round(len/1e3)+"kb");data=new Uint8Array(len);offset=0;ref1=this.imageParts;for(k=0,len2=ref1.length;k<len2;k++){frame=ref1[k];ref2=frame.data;for(i=l=0,len3=ref2.length;l<len3;i=++l){page=ref2[i];data.set(page,offset);if(i===frame.data.length-1){offset+=frame.cursor}else{offset+=frame.pageSize}}}image=new Blob([data],{type:"image/gif"});return this.emit("finished",image,data)};GIF.prototype.renderNextFrame=function(){var frame,task,worker;if(this.freeWorkers.length===0){throw new Error("No free workers")}if(this.nextFrame>=this.frames.length){return}frame=this.frames[this.nextFrame++];worker=this.freeWorkers.shift();task=this.getTask(frame);this.log("starting frame "+(task.index+1)+" of "+this.frames.length);this.activeWorkers.push(worker);return worker.postMessage(task)};GIF.prototype.getContextData=function(ctx){return ctx.getImageData(0,0,this.options.width,this.options.height).data};GIF.prototype.getImageData=function(image){var ctx;if(this._canvas==null){this._canvas=document.createElement("canvas");this._canvas.width=this.options.width;this._canvas.height=this.options.height}ctx=this._canvas.getContext("2d");ctx.setFill=this.options.background;ctx.fillRect(0,0,this.options.width,this.options.height);ctx.drawImage(image,0,0);return this.getContextData(ctx)};GIF.prototype.getTask=function(frame){var index,task;index=this.frames.indexOf(frame);task={index:index,last:index===this.frames.length-1,delay:frame.delay,transparent:frame.transparent,width:this.options.width,height:this.options.height,quality:this.options.quality,dither:this.options.dither,globalPalette:this.options.globalPalette,repeat:this.options.repeat,canTransfer:browser.name==="chrome"};if(frame.data!=null){task.data=frame.data}else if(frame.context!=null){task.data=this.getContextData(frame.context)}else if(frame.image!=null){task.data=this.getImageData(frame.image)}else{throw new Error("Invalid frame")}return task};GIF.prototype.log=function(){var args;args=1<=arguments.length?slice.call(arguments,0):[];if(!this.options.debug){return}return console.log.apply(console,args)};return GIF}(EventEmitter);module.exports=GIF},{"./browser.coffee":2,events:1}]},{},[3])(3)});
+
+</script>
+
+<!-- gif.worker.js 0.2.0 source, kept inert (type=text/plain) and turned into a Blob Worker at runtime -->
+<script type="text/plain" id="gifWorkerSrc">
+
+(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){var NeuQuant=require("./TypedNeuQuant.js");var LZWEncoder=require("./LZWEncoder.js");function ByteArray(){this.page=-1;this.pages=[];this.newPage()}ByteArray.pageSize=4096;ByteArray.charMap={};for(var i=0;i<256;i++)ByteArray.charMap[i]=String.fromCharCode(i);ByteArray.prototype.newPage=function(){this.pages[++this.page]=new Uint8Array(ByteArray.pageSize);this.cursor=0};ByteArray.prototype.getData=function(){var rv="";for(var p=0;p<this.pages.length;p++){for(var i=0;i<ByteArray.pageSize;i++){rv+=ByteArray.charMap[this.pages[p][i]]}}return rv};ByteArray.prototype.writeByte=function(val){if(this.cursor>=ByteArray.pageSize)this.newPage();this.pages[this.page][this.cursor++]=val};ByteArray.prototype.writeUTFBytes=function(string){for(var l=string.length,i=0;i<l;i++)this.writeByte(string.charCodeAt(i))};ByteArray.prototype.writeBytes=function(array,offset,length){for(var l=length||array.length,i=offset||0;i<l;i++)this.writeByte(array[i])};function GIFEncoder(width,height){this.width=~~width;this.height=~~height;this.transparent=null;this.transIndex=0;this.repeat=-1;this.delay=0;this.image=null;this.pixels=null;this.indexedPixels=null;this.colorDepth=null;this.colorTab=null;this.neuQuant=null;this.usedEntry=new Array;this.palSize=7;this.dispose=-1;this.firstFrame=true;this.sample=10;this.dither=false;this.globalPalette=false;this.out=new ByteArray}GIFEncoder.prototype.setDelay=function(milliseconds){this.delay=Math.round(milliseconds/10)};GIFEncoder.prototype.setFrameRate=function(fps){this.delay=Math.round(100/fps)};GIFEncoder.prototype.setDispose=function(disposalCode){if(disposalCode>=0)this.dispose=disposalCode};GIFEncoder.prototype.setRepeat=function(repeat){this.repeat=repeat};GIFEncoder.prototype.setTransparent=function(color){this.transparent=color};GIFEncoder.prototype.addFrame=function(imageData){this.image=imageData;this.colorTab=this.globalPalette&&this.globalPalette.slice?this.globalPalette:null;this.getImagePixels();this.analyzePixels();if(this.globalPalette===true)this.globalPalette=this.colorTab;if(this.firstFrame){this.writeLSD();this.writePalette();if(this.repeat>=0){this.writeNetscapeExt()}}this.writeGraphicCtrlExt();this.writeImageDesc();if(!this.firstFrame&&!this.globalPalette)this.writePalette();this.writePixels();this.firstFrame=false};GIFEncoder.prototype.finish=function(){this.out.writeByte(59)};GIFEncoder.prototype.setQuality=function(quality){if(quality<1)quality=1;this.sample=quality};GIFEncoder.prototype.setDither=function(dither){if(dither===true)dither="FloydSteinberg";this.dither=dither};GIFEncoder.prototype.setGlobalPalette=function(palette){this.globalPalette=palette};GIFEncoder.prototype.getGlobalPalette=function(){return this.globalPalette&&this.globalPalette.slice&&this.globalPalette.slice(0)||this.globalPalette};GIFEncoder.prototype.writeHeader=function(){this.out.writeUTFBytes("GIF89a")};GIFEncoder.prototype.analyzePixels=function(){if(!this.colorTab){this.neuQuant=new NeuQuant(this.pixels,this.sample);this.neuQuant.buildColormap();this.colorTab=this.neuQuant.getColormap()}if(this.dither){this.ditherPixels(this.dither.replace("-serpentine",""),this.dither.match(/-serpentine/)!==null)}else{this.indexPixels()}this.pixels=null;this.colorDepth=8;this.palSize=7;if(this.transparent!==null){this.transIndex=this.findClosest(this.transparent,true)}};GIFEncoder.prototype.indexPixels=function(imgq){var nPix=this.pixels.length/3;this.indexedPixels=new Uint8Array(nPix);var k=0;for(var j=0;j<nPix;j++){var index=this.findClosestRGB(this.pixels[k++]&255,this.pixels[k++]&255,this.pixels[k++]&255);this.usedEntry[index]=true;this.indexedPixels[j]=index}};GIFEncoder.prototype.ditherPixels=function(kernel,serpentine){var kernels={FalseFloydSteinberg:[[3/8,1,0],[3/8,0,1],[2/8,1,1]],FloydSteinberg:[[7/16,1,0],[3/16,-1,1],[5/16,0,1],[1/16,1,1]],Stucki:[[8/42,1,0],[4/42,2,0],[2/42,-2,1],[4/42,-1,1],[8/42,0,1],[4/42,1,1],[2/42,2,1],[1/42,-2,2],[2/42,-1,2],[4/42,0,2],[2/42,1,2],[1/42,2,2]],Atkinson:[[1/8,1,0],[1/8,2,0],[1/8,-1,1],[1/8,0,1],[1/8,1,1],[1/8,0,2]]};if(!kernel||!kernels[kernel]){throw"Unknown dithering kernel: "+kernel}var ds=kernels[kernel];var index=0,height=this.height,width=this.width,data=this.pixels;var direction=serpentine?-1:1;this.indexedPixels=new Uint8Array(this.pixels.length/3);for(var y=0;y<height;y++){if(serpentine)direction=direction*-1;for(var x=direction==1?0:width-1,xend=direction==1?width:0;x!==xend;x+=direction){index=y*width+x;var idx=index*3;var r1=data[idx];var g1=data[idx+1];var b1=data[idx+2];idx=this.findClosestRGB(r1,g1,b1);this.usedEntry[idx]=true;this.indexedPixels[index]=idx;idx*=3;var r2=this.colorTab[idx];var g2=this.colorTab[idx+1];var b2=this.colorTab[idx+2];var er=r1-r2;var eg=g1-g2;var eb=b1-b2;for(var i=direction==1?0:ds.length-1,end=direction==1?ds.length:0;i!==end;i+=direction){var x1=ds[i][1];var y1=ds[i][2];if(x1+x>=0&&x1+x<width&&y1+y>=0&&y1+y<height){var d=ds[i][0];idx=index+x1+y1*width;idx*=3;data[idx]=Math.max(0,Math.min(255,data[idx]+er*d));data[idx+1]=Math.max(0,Math.min(255,data[idx+1]+eg*d));data[idx+2]=Math.max(0,Math.min(255,data[idx+2]+eb*d))}}}}};GIFEncoder.prototype.findClosest=function(c,used){return this.findClosestRGB((c&16711680)>>16,(c&65280)>>8,c&255,used)};GIFEncoder.prototype.findClosestRGB=function(r,g,b,used){if(this.colorTab===null)return-1;if(this.neuQuant&&!used){return this.neuQuant.lookupRGB(r,g,b)}var c=b|g<<8|r<<16;var minpos=0;var dmin=256*256*256;var len=this.colorTab.length;for(var i=0,index=0;i<len;index++){var dr=r-(this.colorTab[i++]&255);var dg=g-(this.colorTab[i++]&255);var db=b-(this.colorTab[i++]&255);var d=dr*dr+dg*dg+db*db;if((!used||this.usedEntry[index])&&d<dmin){dmin=d;minpos=index}}return minpos};GIFEncoder.prototype.getImagePixels=function(){var w=this.width;var h=this.height;this.pixels=new Uint8Array(w*h*3);var data=this.image;var srcPos=0;var count=0;for(var i=0;i<h;i++){for(var j=0;j<w;j++){this.pixels[count++]=data[srcPos++];this.pixels[count++]=data[srcPos++];this.pixels[count++]=data[srcPos++];srcPos++}}};GIFEncoder.prototype.writeGraphicCtrlExt=function(){this.out.writeByte(33);this.out.writeByte(249);this.out.writeByte(4);var transp,disp;if(this.transparent===null){transp=0;disp=0}else{transp=1;disp=2}if(this.dispose>=0){disp=dispose&7}disp<<=2;this.out.writeByte(0|disp|0|transp);this.writeShort(this.delay);this.out.writeByte(this.transIndex);this.out.writeByte(0)};GIFEncoder.prototype.writeImageDesc=function(){this.out.writeByte(44);this.writeShort(0);this.writeShort(0);this.writeShort(this.width);this.writeShort(this.height);if(this.firstFrame||this.globalPalette){this.out.writeByte(0)}else{this.out.writeByte(128|0|0|0|this.palSize)}};GIFEncoder.prototype.writeLSD=function(){this.writeShort(this.width);this.writeShort(this.height);this.out.writeByte(128|112|0|this.palSize);this.out.writeByte(0);this.out.writeByte(0)};GIFEncoder.prototype.writeNetscapeExt=function(){this.out.writeByte(33);this.out.writeByte(255);this.out.writeByte(11);this.out.writeUTFBytes("NETSCAPE2.0");this.out.writeByte(3);this.out.writeByte(1);this.writeShort(this.repeat);this.out.writeByte(0)};GIFEncoder.prototype.writePalette=function(){this.out.writeBytes(this.colorTab);var n=3*256-this.colorTab.length;for(var i=0;i<n;i++)this.out.writeByte(0)};GIFEncoder.prototype.writeShort=function(pValue){this.out.writeByte(pValue&255);this.out.writeByte(pValue>>8&255)};GIFEncoder.prototype.writePixels=function(){var enc=new LZWEncoder(this.width,this.height,this.indexedPixels,this.colorDepth);enc.encode(this.out)};GIFEncoder.prototype.stream=function(){return this.out};module.exports=GIFEncoder},{"./LZWEncoder.js":2,"./TypedNeuQuant.js":3}],2:[function(require,module,exports){var EOF=-1;var BITS=12;var HSIZE=5003;var masks=[0,1,3,7,15,31,63,127,255,511,1023,2047,4095,8191,16383,32767,65535];function LZWEncoder(width,height,pixels,colorDepth){var initCodeSize=Math.max(2,colorDepth);var accum=new Uint8Array(256);var htab=new Int32Array(HSIZE);var codetab=new Int32Array(HSIZE);var cur_accum,cur_bits=0;var a_count;var free_ent=0;var maxcode;var clear_flg=false;var g_init_bits,ClearCode,EOFCode;function char_out(c,outs){accum[a_count++]=c;if(a_count>=254)flush_char(outs)}function cl_block(outs){cl_hash(HSIZE);free_ent=ClearCode+2;clear_flg=true;output(ClearCode,outs)}function cl_hash(hsize){for(var i=0;i<hsize;++i)htab[i]=-1}function compress(init_bits,outs){var fcode,c,i,ent,disp,hsize_reg,hshift;g_init_bits=init_bits;clear_flg=false;n_bits=g_init_bits;maxcode=MAXCODE(n_bits);ClearCode=1<<init_bits-1;EOFCode=ClearCode+1;free_ent=ClearCode+2;a_count=0;ent=nextPixel();hshift=0;for(fcode=HSIZE;fcode<65536;fcode*=2)++hshift;hshift=8-hshift;hsize_reg=HSIZE;cl_hash(hsize_reg);output(ClearCode,outs);outer_loop:while((c=nextPixel())!=EOF){fcode=(c<<BITS)+ent;i=c<<hshift^ent;if(htab[i]===fcode){ent=codetab[i];continue}else if(htab[i]>=0){disp=hsize_reg-i;if(i===0)disp=1;do{if((i-=disp)<0)i+=hsize_reg;if(htab[i]===fcode){ent=codetab[i];continue outer_loop}}while(htab[i]>=0)}output(ent,outs);ent=c;if(free_ent<1<<BITS){codetab[i]=free_ent++;htab[i]=fcode}else{cl_block(outs)}}output(ent,outs);output(EOFCode,outs)}function encode(outs){outs.writeByte(initCodeSize);remaining=width*height;curPixel=0;compress(initCodeSize+1,outs);outs.writeByte(0)}function flush_char(outs){if(a_count>0){outs.writeByte(a_count);outs.writeBytes(accum,0,a_count);a_count=0}}function MAXCODE(n_bits){return(1<<n_bits)-1}function nextPixel(){if(remaining===0)return EOF;--remaining;var pix=pixels[curPixel++];return pix&255}function output(code,outs){cur_accum&=masks[cur_bits];if(cur_bits>0)cur_accum|=code<<cur_bits;else cur_accum=code;cur_bits+=n_bits;while(cur_bits>=8){char_out(cur_accum&255,outs);cur_accum>>=8;cur_bits-=8}if(free_ent>maxcode||clear_flg){if(clear_flg){maxcode=MAXCODE(n_bits=g_init_bits);clear_flg=false}else{++n_bits;if(n_bits==BITS)maxcode=1<<BITS;else maxcode=MAXCODE(n_bits)}}if(code==EOFCode){while(cur_bits>0){char_out(cur_accum&255,outs);cur_accum>>=8;cur_bits-=8}flush_char(outs)}}this.encode=encode}module.exports=LZWEncoder},{}],3:[function(require,module,exports){var ncycles=100;var netsize=256;var maxnetpos=netsize-1;var netbiasshift=4;var intbiasshift=16;var intbias=1<<intbiasshift;var gammashift=10;var gamma=1<<gammashift;var betashift=10;var beta=intbias>>betashift;var betagamma=intbias<<gammashift-betashift;var initrad=netsize>>3;var radiusbiasshift=6;var radiusbias=1<<radiusbiasshift;var initradius=initrad*radiusbias;var radiusdec=30;var alphabiasshift=10;var initalpha=1<<alphabiasshift;var alphadec;var radbiasshift=8;var radbias=1<<radbiasshift;var alpharadbshift=alphabiasshift+radbiasshift;var alpharadbias=1<<alpharadbshift;var prime1=499;var prime2=491;var prime3=487;var prime4=503;var minpicturebytes=3*prime4;function NeuQuant(pixels,samplefac){var network;var netindex;var bias;var freq;var radpower;function init(){network=[];netindex=new Int32Array(256);bias=new Int32Array(netsize);freq=new Int32Array(netsize);radpower=new Int32Array(netsize>>3);var i,v;for(i=0;i<netsize;i++){v=(i<<netbiasshift+8)/netsize;network[i]=new Float64Array([v,v,v,0]);freq[i]=intbias/netsize;bias[i]=0}}function unbiasnet(){for(var i=0;i<netsize;i++){network[i][0]>>=netbiasshift;network[i][1]>>=netbiasshift;network[i][2]>>=netbiasshift;network[i][3]=i}}function altersingle(alpha,i,b,g,r){network[i][0]-=alpha*(network[i][0]-b)/initalpha;network[i][1]-=alpha*(network[i][1]-g)/initalpha;network[i][2]-=alpha*(network[i][2]-r)/initalpha}function alterneigh(radius,i,b,g,r){var lo=Math.abs(i-radius);var hi=Math.min(i+radius,netsize);var j=i+1;var k=i-1;var m=1;var p,a;while(j<hi||k>lo){a=radpower[m++];if(j<hi){p=network[j++];p[0]-=a*(p[0]-b)/alpharadbias;p[1]-=a*(p[1]-g)/alpharadbias;p[2]-=a*(p[2]-r)/alpharadbias}if(k>lo){p=network[k--];p[0]-=a*(p[0]-b)/alpharadbias;p[1]-=a*(p[1]-g)/alpharadbias;p[2]-=a*(p[2]-r)/alpharadbias}}}function contest(b,g,r){var bestd=~(1<<31);var bestbiasd=bestd;var bestpos=-1;var bestbiaspos=bestpos;var i,n,dist,biasdist,betafreq;for(i=0;i<netsize;i++){n=network[i];dist=Math.abs(n[0]-b)+Math.abs(n[1]-g)+Math.abs(n[2]-r);if(dist<bestd){bestd=dist;bestpos=i}biasdist=dist-(bias[i]>>intbiasshift-netbiasshift);if(biasdist<bestbiasd){bestbiasd=biasdist;bestbiaspos=i}betafreq=freq[i]>>betashift;freq[i]-=betafreq;bias[i]+=betafreq<<gammashift}freq[bestpos]+=beta;bias[bestpos]-=betagamma;return bestbiaspos}function inxbuild(){var i,j,p,q,smallpos,smallval,previouscol=0,startpos=0;for(i=0;i<netsize;i++){p=network[i];smallpos=i;smallval=p[1];for(j=i+1;j<netsize;j++){q=network[j];if(q[1]<smallval){smallpos=j;smallval=q[1]}}q=network[smallpos];if(i!=smallpos){j=q[0];q[0]=p[0];p[0]=j;j=q[1];q[1]=p[1];p[1]=j;j=q[2];q[2]=p[2];p[2]=j;j=q[3];q[3]=p[3];p[3]=j}if(smallval!=previouscol){netindex[previouscol]=startpos+i>>1;for(j=previouscol+1;j<smallval;j++)netindex[j]=i;previouscol=smallval;startpos=i}}netindex[previouscol]=startpos+maxnetpos>>1;for(j=previouscol+1;j<256;j++)netindex[j]=maxnetpos}function inxsearch(b,g,r){var a,p,dist;var bestd=1e3;var best=-1;var i=netindex[g];var j=i-1;while(i<netsize||j>=0){if(i<netsize){p=network[i];dist=p[1]-g;if(dist>=bestd)i=netsize;else{i++;if(dist<0)dist=-dist;a=p[0]-b;if(a<0)a=-a;dist+=a;if(dist<bestd){a=p[2]-r;if(a<0)a=-a;dist+=a;if(dist<bestd){bestd=dist;best=p[3]}}}}if(j>=0){p=network[j];dist=g-p[1];if(dist>=bestd)j=-1;else{j--;if(dist<0)dist=-dist;a=p[0]-b;if(a<0)a=-a;dist+=a;if(dist<bestd){a=p[2]-r;if(a<0)a=-a;dist+=a;if(dist<bestd){bestd=dist;best=p[3]}}}}}return best}function learn(){var i;var lengthcount=pixels.length;var alphadec=30+(samplefac-1)/3;var samplepixels=lengthcount/(3*samplefac);var delta=~~(samplepixels/ncycles);var alpha=initalpha;var radius=initradius;var rad=radius>>radiusbiasshift;if(rad<=1)rad=0;for(i=0;i<rad;i++)radpower[i]=alpha*((rad*rad-i*i)*radbias/(rad*rad));var step;if(lengthcount<minpicturebytes){samplefac=1;step=3}else if(lengthcount%prime1!==0){step=3*prime1}else if(lengthcount%prime2!==0){step=3*prime2}else if(lengthcount%prime3!==0){step=3*prime3}else{step=3*prime4}var b,g,r,j;var pix=0;i=0;while(i<samplepixels){b=(pixels[pix]&255)<<netbiasshift;g=(pixels[pix+1]&255)<<netbiasshift;r=(pixels[pix+2]&255)<<netbiasshift;j=contest(b,g,r);altersingle(alpha,j,b,g,r);if(rad!==0)alterneigh(rad,j,b,g,r);pix+=step;if(pix>=lengthcount)pix-=lengthcount;i++;if(delta===0)delta=1;if(i%delta===0){alpha-=alpha/alphadec;radius-=radius/radiusdec;rad=radius>>radiusbiasshift;if(rad<=1)rad=0;for(j=0;j<rad;j++)radpower[j]=alpha*((rad*rad-j*j)*radbias/(rad*rad))}}}function buildColormap(){init();learn();unbiasnet();inxbuild()}this.buildColormap=buildColormap;function getColormap(){var map=[];var index=[];for(var i=0;i<netsize;i++)index[network[i][3]]=i;var k=0;for(var l=0;l<netsize;l++){var j=index[l];map[k++]=network[j][0];map[k++]=network[j][1];map[k++]=network[j][2]}return map}this.getColormap=getColormap;this.lookupRGB=inxsearch}module.exports=NeuQuant},{}],4:[function(require,module,exports){var GIFEncoder,renderFrame;GIFEncoder=require("./GIFEncoder.js");renderFrame=function(frame){var encoder,page,stream,transfer;encoder=new GIFEncoder(frame.width,frame.height);if(frame.index===0){encoder.writeHeader()}else{encoder.firstFrame=false}encoder.setTransparent(frame.transparent);encoder.setRepeat(frame.repeat);encoder.setDelay(frame.delay);encoder.setQuality(frame.quality);encoder.setDither(frame.dither);encoder.setGlobalPalette(frame.globalPalette);encoder.addFrame(frame.data);if(frame.last){encoder.finish()}if(frame.globalPalette===true){frame.globalPalette=encoder.getGlobalPalette()}stream=encoder.stream();frame.data=stream.pages;frame.cursor=stream.cursor;frame.pageSize=stream.constructor.pageSize;if(frame.canTransfer){transfer=function(){var i,len,ref,results;ref=frame.data;results=[];for(i=0,len=ref.length;i<len;i++){page=ref[i];results.push(page.buffer)}return results}();return self.postMessage(frame,transfer)}else{return self.postMessage(frame)}};self.onmessage=function(event){return renderFrame(event.data)}},{"./GIFEncoder.js":1}]},{},[4]);
+
+</script>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- the spec ---------- */
+  var SPEC = { w: 440, h: 248, seconds: 5, maxBytes: 5000000, minFps: 12 };
+  var CROP_ASPECT = SPEC.w / SPEC.h;
+
+  function makeDelays(n, pattern) {
+    var a = [];
+    for (var i = 0; i < n; i++) a.push(pattern[i % pattern.length]);
+    return a;
+  }
+  // 20 fps: 100 frames x 50 ms = 5.00 s.  12 fps: 60 frames, 80/80/90 ms repeating = exactly 5.00 s.
+  var TIERS = [
+    { fps: 20, frames: 100, delays: makeDelays(100, [50]) },
+    { fps: 12, frames: 60,  delays: makeDelays(60, [80, 80, 90]) }
+  ];
+
+  /* ---------- theme toggle ---------- */
+  var themeBtn = document.getElementById("themeToggle");
+  function applyThemeLabel() {
+    var explicit = document.documentElement.getAttribute("data-theme");
+    themeBtn.textContent = explicit === "dark" ? "daylight mode" : "darkroom mode";
+  }
+  themeBtn.addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    applyThemeLabel();
+  });
+  applyThemeLabel();
+
+  /* ---------- element refs ---------- */
+  function $(id) { return document.getElementById(id); }
+  var fileInput = $("fileInput"), dropzone = $("dropzone"), transport = $("transport");
+  var scrub = $("scrub"), curTime = $("curTime"), durTime = $("durTime");
+  var clipRange = $("clipRange"), clipLabel = $("clipLabel");
+  var playBtn = $("playBtn"), setStartBtn = $("setStartBtn"), previewBtn = $("previewBtn"), changeBtn = $("changeBtn");
+  var transportMsg = $("transportMsg"), lengthWarn = $("lengthWarn");
+  var frameSection = $("frameSection"), zoomInput = $("zoomInput"), zoomValueEl = $("zoomValue"), resetFrameBtn = $("resetFrameBtn");
+  var exportSection = $("exportSection"), exportBtn = $("exportBtn"), autoCompressInput = $("autoCompressInput");
+  var progressTrack = $("progressTrack"), progressFill = $("progressFill"), progressLabel = $("progressLabel");
+  var resultSection = $("resultSection"), resultImg = $("resultImg"), checklistEl = $("checklist");
+  var resultNote = $("resultNote"), downloadBtn = $("downloadBtn"), downloadHint = $("downloadHint");
+
+  var video = document.createElement("video");
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+
+  /* ---------- state ---------- */
+  var clipStart = 0;
+  var zoom = 1;
+  var crop = { x: 0, y: 0, w: 1, h: 1 }; // normalized to native video pixels
+  var busy = false;
+  var previewing = false;
+  var currentVideoURL = null;
+  var lastResultURL = null, lastResultBlob = null, lastFilename = "loupe.gif";
+  var playerWrap = null, cropBoxEl = null, cropDimsEl = null, cropHandleEl = null, cropZoomGuideEl = null;
+
+  /* ---------- helpers ---------- */
+  function fmtTime(t) {
+    if (!isFinite(t)) return "0:00.0";
+    var m = Math.floor(t / 60);
+    var s = (t % 60).toFixed(1);
+    if (Number(s) < 10) s = "0" + s;
+    return m + ":" + s;
+  }
+  function showMsg(el, text) {
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove("show"); }, 4500);
+  }
+  function seekTo(t) {
+    return new Promise(function (resolve) {
+      var done = false, to = null;
+      function finish() {
+        if (done) return;
+        done = true;
+        clearTimeout(to);
+        video.removeEventListener("seeked", finish);
+        resolve();
+      }
+      to = setTimeout(finish, 3000);
+      video.addEventListener("seeked", finish);
+      video.currentTime = Math.min(Math.max(t, 0), video.duration || t);
+    });
+  }
+  function tooShort() { return !video.duration || video.duration < SPEC.seconds - 0.001; }
+
+  /* ---------- loading a video ---------- */
+  function buildStage() {
+    dropzone.classList.add("has-video");
+    dropzone.innerHTML = "";
+    var wrap = document.createElement("div");
+    wrap.className = "player-wrap";
+    wrap.appendChild(video);
+    dropzone.appendChild(wrap);
+    transport.classList.remove("hidden");
+    playerWrap = wrap;
+
+    cropBoxEl = document.createElement("div");
+    cropBoxEl.className = "crop-box";
+    cropDimsEl = document.createElement("span");
+    cropDimsEl.className = "crop-dims mono";
+    cropZoomGuideEl = document.createElement("div");
+    cropZoomGuideEl.className = "crop-zoom-guide";
+    cropHandleEl = document.createElement("span");
+    cropHandleEl.className = "crop-handle";
+    cropBoxEl.appendChild(cropDimsEl);
+    cropBoxEl.appendChild(cropZoomGuideEl);
+    cropBoxEl.appendChild(cropHandleEl);
+    wrap.appendChild(cropBoxEl);
+    bindCropDrag();
+  }
+
+  function hideResult() {
+    resultSection.classList.add("hidden");
+    if (lastResultURL) { URL.revokeObjectURL(lastResultURL); lastResultURL = null; }
+    lastResultBlob = null;
+  }
+
+  function loadFile(file) {
+    if (!file) return;
+    if (file.type.indexOf("video") !== 0) {
+      if (playerWrap) showMsg(transportMsg, "That doesn't look like a video file.");
+      return;
+    }
+    if (currentVideoURL) URL.revokeObjectURL(currentVideoURL);
+    currentVideoURL = URL.createObjectURL(file);
+    if (!playerWrap) buildStage();
+    hideResult();
+    previewing = false;
+    video.pause();
+    video.addEventListener("loadedmetadata", onMeta, { once: true });
+    video.src = currentVideoURL;
+  }
+
+  function onMeta() {
+    scrub.max = video.duration;
+    scrub.value = 0;
+    durTime.textContent = fmtTime(video.duration);
+    curTime.textContent = fmtTime(0);
+    clipStart = 0;
+    zoom = 1;
+    zoomInput.value = 100;
+    zoomValueEl.textContent = "100%";
+    frameSection.classList.remove("hidden");
+    exportSection.classList.remove("hidden");
+    fitCropToAspect(true);
+    updateClipUI();
+  }
+
+  video.addEventListener("loadeddata", function () { positionCropOverlay(); });
+  video.addEventListener("error", function () {
+    if (playerWrap) showMsg(transportMsg, "This browser can't play that video. Try an MP4 (H.264) or WebM file.");
+  });
+
+  dropzone.addEventListener("click", function () {
+    if (!dropzone.classList.contains("has-video")) fileInput.click();
+  });
+  changeBtn.addEventListener("click", function () { fileInput.click(); });
+  fileInput.addEventListener("change", function () {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+    fileInput.value = "";
+  });
+  ["dragenter", "dragover"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault();
+      if (!dropzone.classList.contains("has-video")) dropzone.classList.add("drag-over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault();
+      dropzone.classList.remove("drag-over");
+    });
+  });
+  dropzone.addEventListener("drop", function (e) {
+    var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file && !busy) loadFile(file);
+  });
+
+  /* ---------- transport + clip window ---------- */
+  video.addEventListener("timeupdate", function () {
+    scrub.value = video.currentTime;
+    curTime.textContent = fmtTime(video.currentTime);
+    if (previewing && video.currentTime >= clipStart + SPEC.seconds - 0.03) {
+      video.pause();
+      previewing = false;
+    }
+  });
+  scrub.addEventListener("input", function () {
+    previewing = false;
+    video.currentTime = parseFloat(scrub.value);
+  });
+  playBtn.addEventListener("click", function () {
+    previewing = false;
+    if (video.paused) video.play(); else video.pause();
+  });
+  video.addEventListener("pause", function () { playBtn.textContent = "▶"; });
+  video.addEventListener("play", function () { playBtn.textContent = "❚❚"; });
+
+  function updateClipUI() {
+    var dur = video.duration;
+    if (!dur) return;
+    var maxStart = Math.max(0, dur - SPEC.seconds);
+    clipStart = Math.min(Math.max(clipStart, 0), maxStart);
+    var short = tooShort();
+
+    clipLabel.textContent = short
+      ? "clip needs 5 s of footage"
+      : "clip " + fmtTime(clipStart) + " → " + fmtTime(clipStart + SPEC.seconds);
+    var f = clipStart / dur;
+    var g = Math.min(SPEC.seconds, dur) / dur;
+    clipRange.style.left = "calc(7px + (100% - 14px) * " + f + ")";
+    clipRange.style.width = "calc((100% - 14px) * " + g + ")";
+
+    if (short) {
+      lengthWarn.textContent = "This video is only " + dur.toFixed(1) + " s long — a 5 s GIF needs at least 5 s of footage. Choose a longer video.";
+      lengthWarn.classList.add("show");
+    } else {
+      lengthWarn.classList.remove("show");
+    }
+    exportBtn.disabled = busy || short;
+  }
+
+  setStartBtn.addEventListener("click", function () {
+    if (busy || !video.duration) return;
+    var t = video.currentTime;
+    var maxStart = Math.max(0, video.duration - SPEC.seconds);
+    if (t > maxStart + 0.001 && !tooShort()) {
+      showMsg(transportMsg, "Moved the start back so a full 5 s fits before the end of the video.");
+      t = maxStart;
+    }
+    clipStart = t;
+    updateClipUI();
+  });
+
+  previewBtn.addEventListener("click", function () {
+    if (busy || tooShort()) return;
+    previewing = true;
+    seekTo(clipStart).then(function () { video.play(); });
+  });
+
+  /* ---------- crop overlay (locked to the spec's aspect) ---------- */
+  function videoDisplayRect() {
+    var wrapRect = playerWrap.getBoundingClientRect();
+    var vRect = video.getBoundingClientRect();
+    return { left: vRect.left - wrapRect.left, top: vRect.top - wrapRect.top, width: vRect.width, height: vRect.height };
+  }
+
+  function positionCropOverlay() {
+    if (!playerWrap || !video.videoWidth) return;
+    var r = videoDisplayRect();
+    var vw = video.videoWidth, vh = video.videoHeight;
+    cropBoxEl.style.left = (r.left + crop.x * r.width) + "px";
+    cropBoxEl.style.top = (r.top + crop.y * r.height) + "px";
+    cropBoxEl.style.width = (crop.w * r.width) + "px";
+    cropBoxEl.style.height = (crop.h * r.height) + "px";
+
+    var pxW = Math.round((crop.w * vw) / zoom);
+    var pxH = Math.round((crop.h * vh) / zoom);
+    cropDimsEl.textContent = zoom > 1.001 ? (pxW + " × " + pxH + " source px (zoom " + Math.round(zoom * 100) + "%)") : (pxW + " × " + pxH + " source px");
+
+    if (zoom > 1.001) {
+      var inset = 50 * (1 - 1 / zoom) + "%";
+      cropZoomGuideEl.style.top = inset;
+      cropZoomGuideEl.style.left = inset;
+      cropZoomGuideEl.style.right = inset;
+      cropZoomGuideEl.style.bottom = inset;
+      cropZoomGuideEl.style.display = "block";
+    } else {
+      cropZoomGuideEl.style.display = "none";
+    }
+  }
+  window.addEventListener("resize", positionCropOverlay);
+
+  function fitCropToAspect(recenter) {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw) return;
+    var w, h;
+    if (vw / vh > CROP_ASPECT) { h = vh; w = h * CROP_ASPECT; }
+    else { w = vw; h = w / CROP_ASPECT; }
+    crop.w = w / vw;
+    crop.h = h / vh;
+    if (recenter) {
+      crop.x = (1 - crop.w) / 2;
+      crop.y = (1 - crop.h) / 2;
+    } else {
+      crop.x = Math.min(Math.max(crop.x, 0), 1 - crop.w);
+      crop.y = Math.min(Math.max(crop.y, 0), 1 - crop.h);
+    }
+    positionCropOverlay();
+  }
+
+  function bindCropDrag() {
+    var mode = null, start = null;
+
+    cropBoxEl.addEventListener("pointerdown", function (e) {
+      if (e.target === cropHandleEl || busy) return;
+      mode = "move";
+      start = { px: e.clientX, py: e.clientY, x: crop.x, y: crop.y };
+      cropBoxEl.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    cropHandleEl.addEventListener("pointerdown", function (e) {
+      if (busy) return;
+      mode = "resize";
+      start = { px: e.clientX, py: e.clientY, w: crop.w, h: crop.h };
+      cropHandleEl.setPointerCapture(e.pointerId);
+      e.stopPropagation();
+      e.preventDefault();
+    });
+
+    window.addEventListener("pointermove", function (e) {
+      if (!mode || !video.videoWidth) return;
+      var r = videoDisplayRect();
+      var dxN = (e.clientX - start.px) / r.width;
+      var dyN = (e.clientY - start.py) / r.height;
+      if (mode === "move") {
+        crop.x = Math.min(Math.max(start.x + dxN, 0), 1 - crop.w);
+        crop.y = Math.min(Math.max(start.y + dyN, 0), 1 - crop.h);
+      } else {
+        var vw = video.videoWidth, vh = video.videoHeight;
+        var minSize = 0.06;
+        var newW = Math.min(Math.max(start.w + dxN, minSize), 1 - crop.x);
+        var newH = (newW * vw) / CROP_ASPECT / vh;
+        if (crop.y + newH > 1) { newH = 1 - crop.y; newW = (newH * vh * CROP_ASPECT) / vw; }
+        crop.w = newW;
+        crop.h = newH;
+      }
+      positionCropOverlay();
+    });
+    window.addEventListener("pointerup", function () { mode = null; });
+  }
+
+  zoomInput.addEventListener("input", function () {
+    zoom = parseInt(zoomInput.value, 10) / 100;
+    zoomValueEl.textContent = zoomInput.value + "%";
+    positionCropOverlay();
+  });
+  resetFrameBtn.addEventListener("click", function () {
+    zoom = 1;
+    zoomInput.value = 100;
+    zoomValueEl.textContent = "100%";
+    fitCropToAspect(true);
+  });
+
+  /* ---------- busy state ---------- */
+  function setBusy(b) {
+    busy = b;
+    [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub, autoCompressInput].forEach(function (el) { el.disabled = b; });
+    exportBtn.disabled = b || tooShort();
+    exportBtn.textContent = b ? "Exporting…" : "Export GIF";
+    if (cropBoxEl) cropBoxEl.style.pointerEvents = b ? "none" : "auto";
+  }
+  function setProgress(frac, label) {
+    progressTrack.classList.add("show");
+    progressFill.style.width = Math.round(frac * 100) + "%";
+    progressLabel.textContent = label;
+  }
+
+  /* ---------- capture ---------- */
+  function sampleRect() {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    var sx = crop.x * vw, sy = crop.y * vh, sw = crop.w * vw, sh = crop.h * vh;
+    if (zoom > 1.001) {
+      var cx = sx + sw / 2, cy = sy + sh / 2;
+      sw = sw / zoom;
+      sh = sh / zoom;
+      sx = cx - sw / 2;
+      sy = cy - sh / 2;
+    }
+    return { sx: sx, sy: sy, sw: sw, sh: sh };
+  }
+
+  async function captureFrames(tier, prefix) {
+    var cv = document.createElement("canvas");
+    cv.width = SPEC.w;
+    cv.height = SPEC.h;
+    var ctx = cv.getContext("2d", { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    var r = sampleRect();
+    var out = [];
+    for (var i = 0; i < tier.frames; i++) {
+      await seekTo(clipStart + i / tier.fps);
+      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, SPEC.w, SPEC.h);
+      out.push(ctx.getImageData(0, 0, SPEC.w, SPEC.h));
+      setProgress(0.5 * (i + 1) / tier.frames, prefix + "capturing frame " + (i + 1) + " of " + tier.frames);
+    }
+    return out;
+  }
+
+  /* ---------- encode ---------- */
+  var workerBlobURL = null;
+  function getWorkerBlobURL() {
+    if (workerBlobURL) return workerBlobURL;
+    var src = document.getElementById("gifWorkerSrc").textContent;
+    workerBlobURL = URL.createObjectURL(new Blob([src], { type: "application/javascript" }));
+    return workerBlobURL;
+  }
+
+  function encodeFrames(frames, tier, prefix) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var gif = new GIF({
+          workers: Math.max(2, Math.min(4, navigator.hardwareConcurrency || 2)),
+          quality: 6,
+          workerScript: getWorkerBlobURL(),
+          repeat: 0,
+          width: SPEC.w,
+          height: SPEC.h
+        });
+        frames.forEach(function (imgData, i) { gif.addFrame(imgData, { delay: tier.delays[i] }); });
+        gif.on("progress", function (p) {
+          setProgress(0.5 + 0.5 * p, prefix + "encoding " + Math.round(p * 100) + "%");
+        });
+        gif.on("finished", function (blob, data) { resolve({ blob: blob, data: data }); });
+        gif.render();
+      } catch (err) { reject(err); }
+    });
+  }
+
+  /* @@COMPRESS-START */
+  /* ---------- compression: custom encoder with one shared palette and unchanged-pixel reuse ---------- */
+  var LEVELS = [
+    { name: "Light",   colors: 256, tol: 0,  soften: false },
+    { name: "Medium",  colors: 256, tol: 5,  soften: false },
+    { name: "Strong",  colors: 128, tol: 9,  soften: false },
+    { name: "Heavy",   colors: 64,  tol: 14, soften: false },
+    { name: "Maximum", colors: 32,  tol: 22, soften: true }
+  ];
+
+  function describeLevel(l) {
+    var parts = [l.colors + " colors"];
+    parts.push(l.tol ? "pixels within ±" + l.tol + " reused from the previous frame" : "unchanged pixels reused from the previous frame");
+    if (l.soften) parts.push("slight softening");
+    return parts.join(", ");
+  }
+
+  function tick() { return new Promise(function (r) { setTimeout(r, 0); }); }
+
+  // 3x3 box blur: calms sensor noise so frames repeat more and compress better.
+  function soften(img) {
+    var W = img.width, H = img.height, s = img.data, d = new Uint8ClampedArray(s.length);
+    for (var y = 0; y < H; y++) {
+      var y0 = y > 0 ? y - 1 : 0, y1 = y < H - 1 ? y + 1 : H - 1;
+      for (var x = 0; x < W; x++) {
+        var x0 = x > 0 ? x - 1 : 0, x1 = x < W - 1 ? x + 1 : W - 1;
+        var r = 0, g = 0, b = 0;
+        for (var yy = y0; yy <= y1; yy++) {
+          for (var xx = x0; xx <= x1; xx++) {
+            var i = (yy * W + xx) * 4;
+            r += s[i]; g += s[i + 1]; b += s[i + 2];
+          }
+        }
+        var n = (y1 - y0 + 1) * (x1 - x0 + 1), o = (y * W + x) * 4;
+        d[o] = r / n; d[o + 1] = g / n; d[o + 2] = b / n; d[o + 3] = 255;
+      }
+    }
+    return { width: W, height: H, data: d };
+  }
+
+  // Median-cut over a 15-bit color histogram sampled from every frame.
+  function buildPalette(frames, count) {
+    var hist = new Uint32Array(32768);
+    for (var f = 0; f < frames.length; f++) {
+      var d = frames[f].data;
+      for (var i = 0; i < d.length; i += 12) {
+        hist[((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3)]++;
+      }
+    }
+    var all = [];
+    for (var c = 0; c < 32768; c++) if (hist[c]) all.push(c);
+
+    function measure(bins) {
+      var pop = 0, rMin = 31, rMax = 0, gMin = 31, gMax = 0, bMin = 31, bMax = 0;
+      for (var i = 0; i < bins.length; i++) {
+        var k = bins[i], r = k >> 10, g = (k >> 5) & 31, b = k & 31;
+        pop += hist[k];
+        if (r < rMin) rMin = r; if (r > rMax) rMax = r;
+        if (g < gMin) gMin = g; if (g > gMax) gMax = g;
+        if (b < bMin) bMin = b; if (b > bMax) bMax = b;
+      }
+      var rr = rMax - rMin, gr = gMax - gMin, br = bMax - bMin;
+      var wr = 2 * rr * rr, wg = 4 * gr * gr, wb = 3 * br * br;
+      return { bins: bins, pop: pop, axis: wg >= wr && wg >= wb ? 1 : (wr >= wb ? 0 : 2), score: pop * (wr + wg + wb) };
+    }
+
+    var boxes = [measure(all)];
+    while (boxes.length < count) {
+      var bi = -1, best = 0;
+      for (var j = 0; j < boxes.length; j++) {
+        if (boxes[j].bins.length > 1 && boxes[j].score > best) { best = boxes[j].score; bi = j; }
+      }
+      if (bi < 0) break;
+      var box = boxes[bi], axis = box.axis;
+      var sorted = box.bins.slice().sort(function (a, b) {
+        var va = axis === 0 ? a >> 10 : (axis === 1 ? (a >> 5) & 31 : a & 31);
+        var vb = axis === 0 ? b >> 10 : (axis === 1 ? (b >> 5) & 31 : b & 31);
+        return va - vb || a - b;
+      });
+      var half = box.pop / 2, run = 0, cut = 1;
+      for (var m = 0; m < sorted.length - 1; m++) {
+        run += hist[sorted[m]];
+        cut = m + 1;
+        if (run >= half) break;
+      }
+      boxes.splice(bi, 1, measure(sorted.slice(0, cut)), measure(sorted.slice(cut)));
+    }
+
+    var rgb = new Uint8Array(boxes.length * 3);
+    boxes.forEach(function (bx, n) {
+      var sr = 0, sg = 0, sb = 0;
+      for (var i = 0; i < bx.bins.length; i++) {
+        var k = bx.bins[i], w = hist[k];
+        sr += (k >> 10) * w; sg += ((k >> 5) & 31) * w; sb += (k & 31) * w;
+      }
+      rgb[n * 3] = Math.round(sr / bx.pop * 255 / 31);
+      rgb[n * 3 + 1] = Math.round(sg / bx.pop * 255 / 31);
+      rgb[n * 3 + 2] = Math.round(sb / bx.pop * 255 / 31);
+    });
+    return { rgb: rgb, n: boxes.length };
+  }
+
+  // 15-bit color -> nearest palette index.
+  function buildLut(rgb, n) {
+    var lut = new Uint8Array(32768);
+    for (var c = 0; c < 32768; c++) {
+      var r = ((c >> 10) << 3) | 4, g = (((c >> 5) & 31) << 3) | 4, b = ((c & 31) << 3) | 4;
+      var bestD = 1e9, bestI = 0;
+      for (var k = 0; k < n; k++) {
+        var dr = r - rgb[k * 3], dg = g - rgb[k * 3 + 1], db = b - rgb[k * 3 + 2];
+        var dd = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+        if (dd < bestD) { bestD = dd; bestI = k; }
+      }
+      lut[c] = bestI;
+    }
+    return lut;
+  }
+
+  // GIF-flavoured LZW. Returns: min code size byte + 255-byte sub-blocks + 0 terminator.
+  function lzwCompress(indices, minCode) {
+    var clear = 1 << minCode, eoi = clear + 1;
+    var next = eoi + 1, size = minCode + 1;
+    var raw = new Uint8Array(Math.ceil(indices.length * 1.6) + 1024);
+    var rp = 0, cur = 0, shift = 0;
+    var dict = new Map();
+    function emit(code) {
+      cur |= code << shift;
+      shift += size;
+      while (shift >= 8) { raw[rp++] = cur & 255; cur >>>= 8; shift -= 8; }
+    }
+    emit(clear);
+    var prefix = indices[0];
+    for (var i = 1; i < indices.length; i++) {
+      var k = indices[i];
+      var key = (prefix << 8) | k;
+      var found = dict.get(key);
+      if (found !== undefined) { prefix = found; continue; }
+      emit(prefix);
+      if (next === 4096) {
+        emit(clear);
+        dict.clear();
+        next = eoi + 1;
+        size = minCode + 1;
+      } else {
+        if (next >= (1 << size)) size++;
+        dict.set(key, next++);
+      }
+      prefix = k;
+    }
+    emit(prefix);
+    emit(eoi);
+    if (shift > 0) raw[rp++] = cur & 255;
+
+    var blocks = Math.ceil(rp / 255);
+    var out = new Uint8Array(1 + rp + blocks + 1);
+    var op = 0;
+    out[op++] = minCode;
+    for (var s = 0; s < rp; s += 255) {
+      var len = Math.min(255, rp - s);
+      out[op++] = len;
+      out.set(raw.subarray(s, s + len), op);
+      op += len;
+    }
+    out[op++] = 0;
+    return out;
+  }
+
+  async function encodeCompressed(frames, delays, level, onProgress) {
+    var W = SPEC.w, H = SPEC.h, N = W * H;
+    var src = level.soften ? frames.map(soften) : frames;
+    var table = level.colors, transIdx = table - 1;
+    var pal = buildPalette(src, table - 1);
+    var lut = buildLut(pal.rgb, pal.n);
+    var bits = Math.round(Math.log2(table));
+    var thr = 9 * level.tol * level.tol;
+    var displayed = new Uint8Array(N);
+    var parts = [];
+    function push(u8) { parts.push(u8); }
+
+    push(Uint8Array.from([71, 73, 70, 56, 57, 97, W & 255, W >> 8, H & 255, H >> 8, 0x80 | 0x70 | (bits - 1), 0, 0]));
+    var gct = new Uint8Array(table * 3);
+    gct.set(pal.rgb.subarray(0, pal.n * 3));
+    push(gct);
+    push(Uint8Array.from([0x21, 0xFF, 0x0B, 78, 69, 84, 83, 67, 65, 80, 69, 50, 46, 48, 3, 1, 0, 0, 0]));
+
+    for (var k = 0; k < src.length; k++) {
+      var d = src[k].data;
+      var idx = new Uint8Array(N);
+      var minX = W, minY = H, maxX = -1, maxY = -1;
+      var first = k === 0;
+      for (var y = 0; y < H; y++) {
+        for (var x = 0; x < W; x++) {
+          var p = y * W + x, o4 = p * 4;
+          var r = d[o4], g = d[o4 + 1], b = d[o4 + 2];
+          var q = lut[((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)];
+          if (!first) {
+            var cur = displayed[p];
+            if (q === cur) { idx[p] = transIdx; continue; }
+            if (thr > 0) {
+              var c3 = cur * 3;
+              var dr = r - pal.rgb[c3], dg = g - pal.rgb[c3 + 1], db = b - pal.rgb[c3 + 2];
+              if (2 * dr * dr + 4 * dg * dg + 3 * db * db <= thr) { idx[p] = transIdx; continue; }
+            }
+          }
+          idx[p] = q;
+          displayed[p] = q;
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+
+      var bx, by, bw, bh, sub;
+      if (maxX < 0) {                       // nothing changed: a single transparent pixel keeps the timing
+        bx = 0; by = 0; bw = 1; bh = 1;
+        sub = Uint8Array.from([transIdx]);
+      } else {
+        bx = minX; by = minY; bw = maxX - minX + 1; bh = maxY - minY + 1;
+        sub = new Uint8Array(bw * bh);
+        for (var row = 0; row < bh; row++) {
+          sub.set(idx.subarray((by + row) * W + bx, (by + row) * W + bx + bw), row * bw);
+        }
+      }
+
+      var cs = Math.round(delays[k] / 10);
+      push(Uint8Array.from([0x21, 0xF9, 0x04, 0x05, cs & 255, cs >> 8, transIdx, 0]));
+      push(Uint8Array.from([0x2C, bx & 255, bx >> 8, by & 255, by >> 8, bw & 255, bw >> 8, bh & 255, bh >> 8, 0]));
+      push(lzwCompress(sub, Math.max(2, bits)));
+
+      if (onProgress) onProgress(k + 1, src.length);
+      if (k % 3 === 2) await tick();
+    }
+    push(Uint8Array.from([0x3B]));
+
+    var total = 0;
+    parts.forEach(function (u) { total += u.length; });
+    var data = new Uint8Array(total), off = 0;
+    parts.forEach(function (u) { data.set(u, off); off += u.length; });
+    return { data: data };
+  }
+  /* @@COMPRESS-END */
+
+  /* ---------- verification: read the finished file back and measure it ---------- */
+  function parseGif(u8) {
+    if (u8.length < 14) return null;
+    var w = u8[6] | (u8[7] << 8), h = u8[8] | (u8[9] << 8);
+    var flags = u8[10];
+    var p = 13;
+    if (flags & 0x80) p += 3 * (1 << ((flags & 7) + 1));
+    var frames = 0, cs = 0, pendingDelay = 0;
+    while (p < u8.length) {
+      var b = u8[p++];
+      if (b === 0x3B) return { w: w, h: h, frames: frames, cs: cs, end: p };
+      if (b === 0x21) {
+        var label = u8[p++];
+        if (label === 0xF9) pendingDelay = u8[p + 2] | (u8[p + 3] << 8);
+        while (p < u8.length) { var sz = u8[p++]; if (sz === 0) break; p += sz; }
+      } else if (b === 0x2C) {
+        var lf = u8[p + 8];
+        p += 9;
+        if (lf & 0x80) p += 3 * (1 << ((lf & 7) + 1));
+        p++;
+        while (p < u8.length) { var s = u8[p++]; if (s === 0) break; p += s; }
+        frames++;
+        cs += pendingDelay;
+        pendingDelay = 0;
+      } else {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  function buildReport(info, bytes) {
+    var dur = info.cs / 100;
+    var fps = dur > 0 ? info.frames / dur : 0;
+    var checks = [
+      { label: "Dimensions", target: "440 × 248", value: info.w + " × " + info.h, ok: info.w === SPEC.w && info.h === SPEC.h },
+      { label: "Duration", target: "5 s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - SPEC.seconds) <= 0.02 },
+      { label: "Frame rate", target: "12 fps or higher", value: fps.toFixed(1) + " fps", ok: fps >= SPEC.minFps - 1e-6 },
+      { label: "File size", target: "under 5 MB", value: (bytes / 1e6).toFixed(2) + " MB", ok: bytes < SPEC.maxBytes }
+    ];
+    var ok = checks.every(function (c) { return c.ok; });
+    var onlySizeFails = !checks[3].ok && checks[0].ok && checks[1].ok && checks[2].ok;
+    return { checks: checks, ok: ok, onlySizeFails: onlySizeFails };
+  }
+
+  function renderChecklist(report) {
+    checklistEl.innerHTML = "";
+    report.checks.forEach(function (c) {
+      var li = document.createElement("li");
+      li.className = c.ok ? "ok" : "bad";
+      var mark = document.createElement("span");
+      mark.className = "mark";
+      mark.textContent = c.ok ? "✓" : "✗";
+      var label = document.createElement("span");
+      label.textContent = c.label + " ";
+      var target = document.createElement("span");
+      target.className = "target";
+      target.textContent = "(" + c.target + ")";
+      label.appendChild(target);
+      var val = document.createElement("span");
+      val.className = "val";
+      val.textContent = c.value;
+      li.appendChild(mark);
+      li.appendChild(label);
+      li.appendChild(val);
+      checklistEl.appendChild(li);
+    });
+  }
+
+  function mb(bytes) { return (bytes / 1e6).toFixed(2); }
+
+  function showSuccess(blob, report, fps, note) {
+    if (lastResultURL) URL.revokeObjectURL(lastResultURL);
+    lastResultBlob = blob;
+    lastResultURL = URL.createObjectURL(blob);
+    lastFilename = "loupe-440x248-" + fps + "fps.gif";
+    resultImg.src = lastResultURL;
+    resultImg.classList.remove("hidden");
+    renderChecklist(report);
+    resultNote.textContent = note;
+    downloadBtn.classList.remove("hidden");
+    downloadHint.textContent = "";
+    resultSection.classList.remove("hidden");
+    resultSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function showFailure(report, text) {
+    if (lastResultURL) { URL.revokeObjectURL(lastResultURL); lastResultURL = null; }
+    lastResultBlob = null;
+    resultImg.classList.add("hidden");
+    downloadBtn.classList.add("hidden");
+    downloadHint.textContent = "";
+    if (report) renderChecklist(report); else checklistEl.innerHTML = "";
+    resultNote.textContent = text;
+    resultSection.classList.remove("hidden");
+    resultSection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  /* ---------- the export run ---------- */
+  async function runExport() {
+    if (busy || !video.videoWidth || tooShort()) return;
+    video.pause();
+    previewing = false;
+    hideResult();
+    setBusy(true);
+    var firstMB = null;
+    try {
+      var frames = null, report = null, bytes = 0;
+
+      // Pass 1 and 2: the standard encoder at 20 fps, then 12 fps.
+      for (var ti = 0; ti < TIERS.length; ti++) {
+        var tier = TIERS[ti];
+        var prefix = ti === 0
+          ? "20 fps · "
+          : "20 fps came to " + firstMB + " MB — redoing at 12 fps · ";
+        frames = null;
+        frames = await captureFrames(tier, prefix);
+        var enc = await encodeFrames(frames, tier, prefix);
+
+        var info = parseGif(enc.data);
+        if (!info) throw new Error("Couldn't read the exported file back to verify it.");
+        bytes = info.end;
+        report = buildReport(info, bytes);
+
+        if (report.ok) {
+          showSuccess(
+            new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }),
+            report, tier.fps,
+            ti === 0
+              ? "Exported at 20 fps, 100 frames. Every spec checked against the finished file."
+              : "The 20 fps version came to " + firstMB + " MB, over the 5 MB limit, so this is the 12 fps redo."
+          );
+          return;
+        }
+        if (!report.onlySizeFails) {
+          showFailure(report, "This export didn't meet the spec, so no download is offered.");
+          return;
+        }
+        if (ti === 0) firstMB = mb(bytes);
+      }
+
+      // Still over 5 MB at 12 fps. `frames` holds that 12 fps capture, so compression needs no re-capture.
+      var tier12 = TIERS[TIERS.length - 1];
+      var standardMB = mb(bytes);
+      if (!autoCompressInput.checked) {
+        showFailure(report, "Even at 12 fps this stretch comes to " + standardMB + " MB, over the 5 MB limit. Turn on auto-compress above, or try a calmer 5 seconds.");
+        return;
+      }
+
+      for (var li = 0; li < LEVELS.length; li++) {
+        var level = LEVELS[li];
+        var cprefix = "Over 5 MB at 12 fps (" + standardMB + " MB) — compressing, " + level.name.toLowerCase() + " (" + (li + 1) + " of " + LEVELS.length + ") · ";
+        var cenc = await encodeCompressed(frames, tier12.delays, level, function (done, total) {
+          setProgress(0.5 + 0.5 * done / total, cprefix + "frame " + done + " of " + total);
+        });
+        var cinfo = parseGif(cenc.data);
+        if (!cinfo) throw new Error("Couldn't read the compressed file back to verify it.");
+        var creport = buildReport(cinfo, cinfo.end);
+
+        if (creport.ok) {
+          showSuccess(
+            new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }),
+            creport, tier12.fps,
+            "The standard 12 fps export came to " + standardMB + " MB, over the 5 MB limit, so the footage was compressed: " +
+            level.name + " (" + describeLevel(level) + "). That's the lightest step that fit."
+          );
+          return;
+        }
+        report = creport;
+        bytes = cinfo.end;
+        if (!creport.onlySizeFails) {
+          showFailure(creport, "The compressed export didn't meet the spec, so no download is offered.");
+          return;
+        }
+      }
+      showFailure(report, "Even at maximum compression this stretch comes to " + mb(bytes) + " MB, over the 5 MB limit, so no download is offered. Try a calmer 5 seconds — fast motion, camera shake and grain are the hardest things to squeeze — or move the start point.");
+    } catch (err) {
+      showFailure(null, "Something went wrong while exporting: " + (err && err.message ? err.message : err));
+    } finally {
+      setBusy(false);
+      progressTrack.classList.remove("show");
+      progressFill.style.width = "0%";
+      progressLabel.textContent = "";
+      updateClipUI();
+    }
+  }
+  exportBtn.addEventListener("click", runExport);
+
+  /* ---------- download (published pages need the downloads capability) ---------- */
+  function fallbackAnchorDownload(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+  }
+
+  downloadBtn.addEventListener("click", function () {
+    if (!lastResultBlob) return;
+    downloadBtn.disabled = true;
+    downloadHint.textContent = "";
+    var blob = lastResultBlob, filename = lastFilename;
+
+    var hasRuntime = window.claude && typeof window.claude.use === "function";
+    var capPromise = hasRuntime ? window.claude.use("downloads") : Promise.resolve(null);
+
+    capPromise.then(function (downloads) {
+      if (!downloads) {
+        fallbackAnchorDownload(blob, filename);
+        downloadBtn.disabled = false;
+        return;
+      }
+      return downloads.save({ filename: filename, data: blob }).then(function (result) {
+        downloadHint.textContent = result.status === "saved" ? "Saved." : "Sent to your chosen destination.";
+        downloadBtn.disabled = false;
+      }, function (err) {
+        downloadBtn.disabled = false;
+        var code = err && err.code;
+        if (code === "declined") return;
+        if (code === "rate_limited") { downloadHint.textContent = "A save prompt is already open — try again in a moment."; return; }
+        fallbackAnchorDownload(blob, filename);
+      });
+    }).catch(function () {
+      fallbackAnchorDownload(blob, filename);
+      downloadBtn.disabled = false;
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
