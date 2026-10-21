@@ -862,7 +862,37 @@
   }
   function drawPhoto(ctx, img, c, W, H) {
     var r = photoCrop(img.width, img.height, c);
-    ctx.drawImage(img, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+    drawDownscaled(ctx, img, r.sx, r.sy, r.sw, r.sh, W, H);
+  }
+
+  // Shrinking a camera photo to 440 px in one drawImage call aliases: fine texture (crowds, foliage,
+  // brickwork, fabric) turns into jagged moiré. So: halve while it's more than 2x too big, apply a light
+  // blur sized to the remaining shrink (a low-pass filter, drawn with a margin of real pixels so the edges
+  // don't darken), then make the final resize. Tuned against a Lanczos reference: sharp detail is kept,
+  // false patterns are cut back. About 80 ms per photo.
+  var DOWNSCALE_BLUR = 0.4;
+  function smoothCanvas(w, h) {
+    var c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    var x = c.getContext("2d", { alpha: false });
+    x.imageSmoothingEnabled = true;
+    x.imageSmoothingQuality = "high";
+    return { c: c, x: x };
+  }
+  function drawDownscaled(ctx, src, sx, sy, sw, sh, W, H) {
+    var cur = src, cw = src.width, ch = src.height;
+    while (sw > W * 2 && sh > H * 2) {
+      var nw = Math.round(cw / 2), nh = Math.round(ch / 2), half = smoothCanvas(nw, nh);
+      half.x.drawImage(cur, 0, 0, cw, ch, 0, 0, nw, nh);
+      sx *= nw / cw; sy *= nh / ch; sw *= nw / cw; sh *= nh / ch;
+      cur = half.c; cw = nw; ch = nh;
+    }
+    var sigma = DOWNSCALE_BLUR * sw / W;
+    if (sigma < 0.3 || typeof ctx.filter !== "string") { ctx.drawImage(cur, sx, sy, sw, sh, 0, 0, W, H); return; }
+    var pad = Math.ceil(sigma * 3) + 1, blur = smoothCanvas(Math.ceil(sw) + 2 * pad, Math.ceil(sh) + 2 * pad);
+    blur.x.filter = "blur(" + sigma.toFixed(2) + "px)";
+    blur.x.drawImage(cur, sx - pad, sy - pad, sw + 2 * pad, sh + 2 * pad, 0, 0, sw + 2 * pad, sh + 2 * pad);
+    ctx.drawImage(blur.c, pad, pad, sw, sh, 0, 0, W, H);
   }
   var MAX_SLIDES = 30;
 
@@ -1480,12 +1510,16 @@
     return workerBlobURL;
   }
 
-  function encodeFrames(frames, tier, prefix) {
+  // opts.quality: NeuQuant sampling step, 1 = studies every pixel (best palette), higher = faster.
+  // opts.dither: false, or a gif.js kernel such as "FloydSteinberg-serpentine".
+  function encodeFrames(frames, tier, prefix, opts) {
+    opts = opts || {};
     return new Promise(function (resolve, reject) {
       try {
         var gif = new GIF({
           workers: Math.max(2, Math.min(4, navigator.hardwareConcurrency || 2)),
-          quality: 6,
+          quality: opts.quality || 6,
+          dither: opts.dither || false,
           workerScript: getWorkerBlobURL(),
           repeat: 0,
           width: SPEC.w,
@@ -2331,6 +2365,10 @@
   // delay), so stills cost almost nothing; a crossfade adds three in-between frames. If that's over 5 MB
   // it falls back to cuts, then to the same stepped compression clip GIFs use.
   var GIF_FADE_FRAMES = 3, GIF_FADE_MS = 100;
+  // Photos get the best palette (every pixel studied, not every 6th): measurably less banding and posterising,
+  // and the files came out slightly smaller. No dithering: it added grain, and gif.js's serpentine kernel
+  // leaves a speckled first column.
+  var SLIDE_GIF_OPTS = { quality: 1, dither: false };
 
   async function buildSlideshowGifFrames(withFades) {
     await ensureLabelFont();
@@ -2382,7 +2420,7 @@
       for (var t = 0; t < tries.length; t++) {
         built = await buildSlideshowGifFrames(tries[t].fades);
         var prefix = t === 0 ? "Slideshow GIF · " : "came to " + firstMB + " MB — redoing " + tries[t].label + " · ";
-        var enc = await encodeFrames(built.frames, { delays: built.delays }, prefix);
+        var enc = await encodeFrames(built.frames, { delays: built.delays }, prefix, SLIDE_GIF_OPTS);
         var info = parseGif(enc.data);
         if (!info) throw new Error("Couldn't read the exported file back to verify it.");
         bytes = info.end;
