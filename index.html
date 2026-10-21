@@ -753,7 +753,7 @@
     if (show) {
       exportInfo.textContent = slides.length < 2
         ? "Add at least two photos."
-        : (f === "mp4" ? "MP4 · " + size + " · 30 fps · " : "GIF · " + size + " · ") +
+        : (f === "mp4" ? "MP4 · " + size + " · 30 fps · " : "GIF · " + (SPEC.w * 2) + " × " + (SPEC.h * 2) + " when it fits, else " + size + " · ") +
           slides.length + " photos, " + fmtSecs(showSeconds()) + " loop · under 5 MB";
     } else {
       exportInfo.textContent = f === "mp4"
@@ -1522,8 +1522,8 @@
           dither: opts.dither || false,
           workerScript: getWorkerBlobURL(),
           repeat: 0,
-          width: SPEC.w,
-          height: SPEC.h
+          width: opts.width || SPEC.w,
+          height: opts.height || SPEC.h
         });
         frames.forEach(function (imgData, i) { gif.addFrame(imgData, { delay: tier.delays[i] }); });
         gif.on("progress", function (p) {
@@ -2263,7 +2263,8 @@
     var dur = info.cs / 100;
     var fps = dur > 0 ? info.frames / dur : 0;
     var checks = [
-      { label: "Dimensions", target: dimsText(), value: info.w + " × " + info.h, ok: info.w === SPEC.w && info.h === SPEC.h },
+      { label: "Dimensions", target: (expect.scale > 1 ? (SPEC.w * expect.scale) + " × " + (SPEC.h * expect.scale) + " (2× of " + dimsText() + ")" : dimsText()),
+        value: info.w + " × " + info.h, ok: info.w === SPEC.w * (expect.scale || 1) && info.h === SPEC.h * (expect.scale || 1) },
       { label: "Duration", target: (+want.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - want) <= 0.02 },
       expect.frames
         ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
@@ -2370,13 +2371,14 @@
   // leaves a speckled first column.
   var SLIDE_GIF_OPTS = { quality: 1, dither: false };
 
-  async function buildSlideshowGifFrames(withFades) {
+  async function buildSlideshowGifFrames(withFades, scale) {
     await ensureLabelFont();
     var n = slides.length, holdMs = Math.round(parseFloat(secsInput.value) * 1000);
     var fades = withFades && transInput.value === "fade" ? GIF_FADE_FRAMES : 0;
+    var W = SPEC.w * scale, H = SPEC.h * scale;
     function canvas() {
       var c = document.createElement("canvas");
-      c.width = SPEC.w; c.height = SPEC.h;
+      c.width = W; c.height = H;
       var x = c.getContext("2d", { alpha: false, willReadFrequently: true });
       x.imageSmoothingEnabled = true;
       x.imageSmoothingQuality = "high";
@@ -2387,26 +2389,37 @@
       var s = slides[i], k = canvas(), full = null;
       setProgress(0.1 * i / n, "preparing photo " + (i + 1) + " of " + n);
       try { full = await createImageBitmap(s.file); } catch (e) { /* fall back to the preview copy */ }
-      drawPhoto(k.x, full || s.bitmap, s.crop, SPEC.w, SPEC.h);
+      drawPhoto(k.x, full || s.bitmap, s.crop, W, H);
       if (full) full.close();
-      drawLabel(k.x, s.label, SPEC.w, SPEC.h);
+      drawLabel(k.x, s.label, W, H);
       cards.push(k);
     }
     var frames = [], delays = [], mix = canvas();
     for (var j = 0; j < n; j++) {
-      frames.push(cards[j].x.getImageData(0, 0, SPEC.w, SPEC.h));
+      frames.push(cards[j].x.getImageData(0, 0, W, H));
       delays.push(holdMs - fades * GIF_FADE_MS);
       for (var f = 1; f <= fades; f++) {
         mix.x.globalAlpha = 1;
         mix.x.drawImage(cards[j].c, 0, 0);
         mix.x.globalAlpha = f / (fades + 1);
         mix.x.drawImage(cards[(j + 1) % n].c, 0, 0);
-        frames.push(mix.x.getImageData(0, 0, SPEC.w, SPEC.h));
+        frames.push(mix.x.getImageData(0, 0, W, H));
         delays.push(GIF_FADE_MS);
       }
     }
     mix.x.globalAlpha = 1;
-    return { frames: frames, delays: delays, seconds: n * holdMs / 1000, thumb: makeThumb(cards[0].c) };
+    return { frames: frames, delays: delays, seconds: n * holdMs / 1000, thumb: makeThumb(cards[0].c), w: W, h: H, scale: scale };
+  }
+
+  // Encodes about a quarter of the frames (3 to 8, evenly spread) and scales the average up to the full count.
+  // Fewer samples underestimated mixed sets, where a few busy photos dominate the size; more cost nearly
+  // as much as just trying on small slideshows.
+  async function estimateGifBytes(built, prefix) {
+    var n = built.frames.length, k = Math.min(8, Math.max(3, Math.ceil(n / 4))), picks = [];
+    for (var t = 0; t < k; t++) picks.push(Math.floor((t + 0.5) * n / k));
+    var sample = await encodeFrames(picks.map(function (i) { return built.frames[i]; }), { delays: picks.map(function () { return 100; }) },
+      prefix + "estimating size · ", { quality: SLIDE_GIF_OPTS.quality, dither: SLIDE_GIF_OPTS.dither, width: built.w, height: built.h });
+    return sample.data.length / picks.length * n;
   }
 
   async function runExportSlideshowGif() {
@@ -2414,28 +2427,44 @@
     hideResult();
     setBusy(true);
     try {
-      var tries = [{ fades: true, label: "" }, { fades: false, label: "with cuts instead of crossfades" }];
-      if (transInput.value !== "fade") tries = [tries[1]];
-      var built = null, report = null, bytes = 0, firstMB = null;
+      // Sharpest first: 2x (880 x 496, shown at 440 x 248, so it stays crisp on high-density screens).
+      // The chosen transition outranks the extra sharpness, so 1x crossfades come before 2x cuts.
+      var fade = transInput.value === "fade";
+      var tries = fade
+        ? [{ fades: true, scale: 2 }, { fades: true, scale: 1 }, { fades: false, scale: 2 }, { fades: false, scale: 1 }]
+        : [{ fades: false, scale: 2 }, { fades: false, scale: 1 }];
+      var built = null, report = null, bytes = 0, misses = [];
       for (var t = 0; t < tries.length; t++) {
-        built = await buildSlideshowGifFrames(tries[t].fades);
-        var prefix = t === 0 ? "Slideshow GIF · " : "came to " + firstMB + " MB — redoing " + tries[t].label + " · ";
-        var enc = await encodeFrames(built.frames, { delays: built.delays }, prefix, SLIDE_GIF_OPTS);
+        var tr = tries[t];
+        built = await buildSlideshowGifFrames(tr.fades, tr.scale);
+        var what = built.w + " × " + built.h + (fade ? (tr.fades ? " with crossfades" : " with cuts") : "");
+        var prefix = t === 0 ? "Slideshow GIF · " + what + " · " : misses[misses.length - 1] + " — trying " + what + " · ";
+        // A 2x attempt that won't fit wastes most of the export time, so project its size from a few sample
+        // frames first and skip it when it's clearly over. A close call still gets the real attempt.
+        if (tr.scale > 1 && built.frames.length > 3) {
+          var est = await estimateGifBytes(built, prefix);
+          if (est > SPEC.maxBytes * 1.15) { misses.push(what + " would come to about " + mb(est) + " MB"); continue; }
+        }
+        var enc = await encodeFrames(built.frames, { delays: built.delays }, prefix,
+          { quality: SLIDE_GIF_OPTS.quality, dither: SLIDE_GIF_OPTS.dither, width: built.w, height: built.h });
         var info = parseGif(enc.data);
         if (!info) throw new Error("Couldn't read the exported file back to verify it.");
         bytes = info.end;
-        report = buildReport(info, bytes, { seconds: built.seconds, frames: built.frames.length });
+        report = buildReport(info, bytes, { seconds: built.seconds, frames: built.frames.length, scale: tr.scale });
         if (report.ok) {
+          var notes = [];
+          if (tr.scale > 1) notes.push("Made at 2× so it stays sharp on high-density screens; show it at " + dimsText() + " on the page.");
+          if (misses.length) notes.push(misses.join("; ") + ", so this is " + what + ", the sharpest version under 5 MB.");
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }), report,
-            "loupe-slideshow-" + slides.length + "photos-" + dimsFile() + "-" + stamp() + ".gif",
-            t === 0 ? "" : "With crossfades it came to " + firstMB + " MB, so it uses cuts to fit under 5 MB.",
-            null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + dimsText() + " · " + fmtSecs(built.seconds), thumb: built.thumb }
+            "loupe-slideshow-" + slides.length + "photos-" + built.w + "x" + built.h + "-" + stamp() + ".gif",
+            notes.join(" "),
+            null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + built.w + "×" + built.h + " · " + fmtSecs(built.seconds), thumb: built.thumb }
           );
           return;
         }
         if (!report.onlySizeFails) { showFailure(report, "This export didn't meet the spec, so no download is offered."); return; }
-        if (firstMB === null) firstMB = mb(bytes);
+        misses.push(what + " came to " + mb(bytes) + " MB");
       }
       // Still over 5 MB with cuts: compress in steps, lightest first.
       var standardMB = mb(bytes);
@@ -2447,14 +2476,14 @@
         });
         var cinfo = parseGif(cenc.data);
         if (!cinfo) throw new Error("Couldn't read the compressed file back to verify it.");
-        var creport = buildReport(cinfo, cinfo.end, { seconds: built.seconds, frames: built.frames.length });
+        var creport = buildReport(cinfo, cinfo.end, { seconds: built.seconds, frames: built.frames.length, scale: 1 });
         report = creport;
         bytes = cinfo.end;
         if (creport.ok) {
           showSuccess(
             new Blob([cenc.data.subarray(0, cinfo.end)], { type: "image/gif" }), creport,
             "loupe-slideshow-" + slides.length + "photos-" + dimsFile() + "-" + stamp() + ".gif",
-            "Uncompressed it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
+            "Even at " + dimsText() + " with cuts it came to " + standardMB + " MB, so it was compressed (" + level.name.toLowerCase() + ": " +
               describeLevel(level) + "), the lightest step that fits under 5 MB.",
             null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + dimsText() + " · " + fmtSecs(built.seconds) + " · " + level.name.toLowerCase() + " compression", thumb: built.thumb }
           );
