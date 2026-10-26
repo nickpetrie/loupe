@@ -417,7 +417,7 @@
   }
 
   /* iPhone zooms the page when a field under 16px gets focus, and on double-tap; neither helps here. */
-  button, select, .slide-thumb { touch-action: manipulation; }
+  button, select, .slide-thumb { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   @media (pointer: coarse) {
     input[type="text"], select, .text-input { font-size: 16px; }
   }
@@ -446,7 +446,7 @@
   <header>
     <div>
       <div class="brand"><span class="brand-mark"></span>LOUPE</div>
-      <p class="tagline">Turn 5 seconds of video, or a set of photos, into a looping GIF or MP4 that already meets the spec.</p>
+      <p class="tagline">Turn 5 seconds of video, or a set of photos, into a looping GIF, WebP or MP4 that already meets the spec.</p>
     </div>
     <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
   </header>
@@ -562,6 +562,7 @@
     <div class="generate-row">
       <div class="seg mono" role="radiogroup" aria-label="Format">
         <button type="button" role="radio" id="fmtGif" aria-checked="true">GIF</button>
+        <button type="button" role="radio" id="fmtWebp" aria-checked="false">WebP</button>
         <button type="button" role="radio" id="fmtMp4" aria-checked="false">MP4</button>
       </div>
       <button class="primary" id="exportBtn" type="button">Export GIF</button>
@@ -667,7 +668,7 @@
   var transportMsg = $("transportMsg"), lengthWarn = $("lengthWarn");
   var frameSection = $("frameSection"), zoomInput = $("zoomInput"), zoomValueEl = $("zoomValue"), resetFrameBtn = $("resetFrameBtn");
   var exportSection = $("exportSection"), exportBtn = $("exportBtn"), exportInfo = $("exportInfo");
-  var fmtGifBtn = $("fmtGif"), fmtMp4Btn = $("fmtMp4");
+  var fmtGifBtn = $("fmtGif"), fmtWebpBtn = $("fmtWebp"), fmtMp4Btn = $("fmtMp4");
   var progressTrack = $("progressTrack"), progressFill = $("progressFill"), progressLabel = $("progressLabel");
   var resultSection = $("resultSection"), resultImg = $("resultImg"), checklistEl = $("checklist");
   var resultNote = $("resultNote"), downloadBtn = $("downloadBtn"), downloadHint = $("downloadHint");
@@ -716,16 +717,21 @@
 
   // GIF is the default because the website only takes GIF for now; each person's last choice is remembered.
   var format = "gif";
-  try { if (localStorage.getItem("loupe.format") === "mp4") format = "mp4"; } catch (e) { /* storage blocked */ }
-  function effFormat() { return mp4Supported ? format : "gif"; }
+  try { var saved = localStorage.getItem("loupe.format"); if (saved === "mp4" || saved === "webp") format = saved; } catch (e) { /* storage blocked */ }
+  function effFormat() {
+    if (format === "mp4" && !mp4Supported) return "gif";
+    if (format === "webp" && !webpSupported) return "gif";
+    return format;
+  }
   function setFormat(f) {
-    if (busy || (f === "mp4" && !mp4Supported)) return;
+    if (busy || (f === "mp4" && !mp4Supported) || (f === "webp" && !webpSupported)) return;
     format = f;
     try { localStorage.setItem("loupe.format", f); } catch (e) { /* storage blocked */ }
     renderExport();
   }
   fmtGifBtn.addEventListener("click", function () { setFormat("gif"); });
   fmtMp4Btn.addEventListener("click", function () { setFormat("mp4"); });
+  fmtWebpBtn.addEventListener("click", function () { setFormat("webp"); });
 
   function showSeconds() { return slides.length * parseFloat(secsInput.value); }
   function clipReady() { return !!video.videoWidth && !tooShort(); }
@@ -734,6 +740,7 @@
     exportBtn.disabled = busy || !canExport();
     fmtGifBtn.disabled = busy;
     fmtMp4Btn.disabled = busy || !mp4Supported;
+    fmtWebpBtn.disabled = busy || !webpSupported;
   }
   function fmtSecs(x) { return (+x.toFixed(1)) + " s"; }
 
@@ -746,19 +753,27 @@
     var f = effFormat();
     fmtGifBtn.setAttribute("aria-checked", f === "gif");
     fmtMp4Btn.setAttribute("aria-checked", f === "mp4");
+    fmtWebpBtn.setAttribute("aria-checked", f === "webp");
     fmtMp4Btn.title = mp4Supported ? "Smaller and smoother, for places that accept video" : "MP4 needs a current Chrome, Edge or Safari";
-    if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : "Export GIF";
+    fmtWebpBtn.title = webpSupported
+      ? "Full colour and several times smaller than GIF; shows anywhere a GIF does in current browsers"
+      : "Making WebP needs Chrome, Edge or Firefox. Safari can show WebP but can't create it";
+    if (!busy) exportBtn.textContent = f === "mp4" ? "Export MP4" : f === "webp" ? "Export WebP" : "Export GIF";
 
     var d = mp4Dims(), size = f === "mp4" ? d.w + " × " + d.h : dimsText();
     if (show) {
       exportInfo.textContent = slides.length < 2
         ? "Add at least two photos."
-        : (f === "mp4" ? "MP4 · " + size + " · 30 fps · " : "GIF · " + (SPEC.w * 2) + " × " + (SPEC.h * 2) + " when it fits, else " + size + " · ") +
+        : (f === "mp4" ? "MP4 · " + size + " · 30 fps · "
+          : f === "webp" ? "WebP · " + (SPEC.w * 2) + " × " + (SPEC.h * 2) + " · full colour · "
+          : "GIF · " + (SPEC.w * 2) + " × " + (SPEC.h * 2) + " when it fits, else " + size + " · ") +
           slides.length + " photos, " + fmtSecs(showSeconds()) + " loop · under 5 MB";
     } else {
       exportInfo.textContent = f === "mp4"
         ? "MP4 · " + size + " · 30 fps · 5 s · under 5 MB · takes about 5 s"
-        : "GIF · " + size + " · 20 fps (12 if needed) · 5 s · under 5 MB";
+        : f === "webp"
+          ? "WebP · " + d.w + " × " + d.h + " · full colour · 20 fps · 5 s · under 5 MB"
+          : "GIF · " + size + " · 20 fps (12 if needed) · 5 s · under 5 MB";
     }
     updateExportState();
   }
@@ -2333,7 +2348,7 @@
     resultVideo.classList.toggle("hidden", !isVideo);
     if (isVideo) { resultImg.removeAttribute("src"); resultVideo.src = lastResultURL; resultVideo.play().catch(function () {}); }
     else { resultVideo.removeAttribute("src"); resultVideo.load(); resultImg.src = lastResultURL; }
-    downloadBtn.textContent = isVideo ? "Download MP4 ↓" : "Download GIF ↓";
+    downloadBtn.textContent = "Download " + ({ "video/mp4": "MP4", "image/webp": "WebP", "image/gif": "GIF" }[blob.type] || "") + " ↓";
     lastEmbed = embed || "";
     copyEmbedBtn.classList.toggle("hidden", !embed);
     renderVerdict(report);
@@ -2586,8 +2601,232 @@
       updateClipUI();
     }
   }
+  /* ---------- WebP: frames encoded by the browser, assembled into an animated WebP here ---------- */
+  // Animated WebP shows anywhere a GIF does in current browsers (an ordinary <img>), in full colour and
+  // usually several times smaller. Chrome, Edge and Firefox can encode WebP from a canvas; Safari can show
+  // WebP but not create it, so the option is disabled there.
+  var webpSupported = (function () {
+    try { var c = document.createElement("canvas"); c.width = c.height = 1; return c.toDataURL("image/webp").indexOf("data:image/webp") === 0; }
+    catch (e) { return false; }
+  })();
+  var WEBP_QUALITY = [0.92, 0.85, 0.75, 0.6]; // video clips: highest first, stepped down only if a file would pass 5 MB
+  // Slideshows: each photo is on screen for seconds, crossfade frames for 50 ms, so photos get the quality.
+  // In Chrome, quality 1.0 is lossless: a pixel-perfect copy of the resized photo (~400 KB at 880 x 496).
+  // Measured on real photos against an ideal resize: lossless 1.000, 0.97 -> 0.975-0.987, today's GIF 0.93-0.96.
+  var SLIDE_WEBP_STEPS = [
+    { hold: 1, fade: 0.85 }, { hold: 0.97, fade: 0.85 }, { hold: 0.92, fade: 0.8 }, { hold: 0.85, fade: 0.75 }, { hold: 0.75, fade: 0.6 }
+  ];
+  function stepLabel(q) { return q >= 1 ? "lossless photos" : "quality " + Math.round(q * 100); }
+  var WEBP_FADE_FRAMES = 8, WEBP_FADE_MS = 50; // crossfades are cheap in WebP, so they can be smooth
+  var WEBP_CLIP_FPS = 20;
+
+  function le(n, bytes) { var a = []; for (var i = 0; i < bytes; i++) a.push((n >>> (8 * i)) & 255); return a; }
+  function fourcc(u8, p) { return String.fromCharCode(u8[p], u8[p + 1], u8[p + 2], u8[p + 3]); }
+
+  // One still from the canvas, reduced to the chunks an animation frame carries (ALPH, then VP8 or VP8L).
+  function canvasToWebpFrame(canvas, q) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (!blob || blob.type !== "image/webp") return reject(new Error("this browser can't make WebP. Use Chrome, Edge or Firefox, or export a GIF."));
+        blob.arrayBuffer().then(function (buf) {
+          var u8 = new Uint8Array(buf), p = 12, keep = [];
+          if (fourcc(u8, 0) !== "RIFF" || fourcc(u8, 8) !== "WEBP") return reject(new Error("the browser returned an unreadable WebP frame."));
+          while (p + 8 <= u8.length) {
+            var type = fourcc(u8, p), size = (u8[p + 4] | (u8[p + 5] << 8) | (u8[p + 6] << 16) | (u8[p + 7] << 24)) >>> 0;
+            var end = p + 8 + size + (size & 1);
+            if (type === "ALPH" || type === "VP8 " || type === "VP8L") keep.push(u8.subarray(p, Math.min(end, u8.length)));
+            p = end;
+          }
+          var len = 0; keep.forEach(function (k) { len += k.length; });
+          var out = new Uint8Array(len), o = 0; keep.forEach(function (k) { out.set(k, o); o += k.length; });
+          resolve(out);
+        }, reject);
+      }, "image/webp", q);
+    });
+  }
+
+  // frames: [{ data: Uint8Array (frame chunks), ms }]. Every frame covers the whole canvas and replaces
+  // the last one (no blending), so each is shown exactly as encoded. Loops forever.
+  function muxWebp(frames, W, H) {
+    var parts = [], body = 0;
+    function chunk(type, payload) {
+      var head = new Uint8Array(8);
+      head.set(ascii(type), 0);
+      head.set(le(payload.length, 4), 4);
+      parts.push(head);
+      parts.push(payload);
+      if (payload.length & 1) parts.push(new Uint8Array(1));
+      body += 8 + payload.length + (payload.length & 1);
+    }
+    chunk("VP8X", Uint8Array.from([0x02, 0, 0, 0].concat(le(W - 1, 3), le(H - 1, 3)))); // 0x02 = animation
+    chunk("ANIM", Uint8Array.from([0, 0, 0, 0].concat(le(0, 2))));                     // no background, loop forever
+    frames.forEach(function (f) {
+      var payload = new Uint8Array(16 + f.data.length);
+      payload.set([].concat(le(0, 3), le(0, 3), le(W - 1, 3), le(H - 1, 3), le(Math.round(f.ms), 3), [0x02]), 0); // 0x02 = don't blend
+      payload.set(f.data, 16);
+      chunk("ANMF", payload);
+    });
+    var out = new Uint8Array(12 + body), o = 12;
+    out.set(ascii("RIFF"), 0); out.set(le(4 + body, 4), 4); out.set(ascii("WEBP"), 8);
+    parts.forEach(function (p) { out.set(p, o); o += p.length; });
+    return out;
+  }
+
+  // Read the finished file back: canvas size, loop setting, frame count and total time.
+  function inspectWebp(u8) {
+    var info = { valid: false, frames: 0, ms: 0, w: 0, h: 0, loop: -1 };
+    if (u8.length < 30 || fourcc(u8, 0) !== "RIFF" || fourcc(u8, 8) !== "WEBP") return info;
+    var p = 12;
+    while (p + 8 <= u8.length) {
+      var type = fourcc(u8, p), size = (u8[p + 4] | (u8[p + 5] << 8) | (u8[p + 6] << 16) | (u8[p + 7] << 24)) >>> 0, d = p + 8;
+      if (d + size > u8.length) return info;
+      if (type === "VP8X") { info.w = 1 + (u8[d + 4] | (u8[d + 5] << 8) | (u8[d + 6] << 16)); info.h = 1 + (u8[d + 7] | (u8[d + 8] << 8) | (u8[d + 9] << 16)); }
+      else if (type === "ANIM") info.loop = u8[d + 4] | (u8[d + 5] << 8);
+      else if (type === "ANMF") { info.frames++; info.ms += u8[d + 12] | (u8[d + 13] << 8) | (u8[d + 14] << 16); }
+      p = d + size + (size & 1);
+    }
+    info.valid = p === u8.length && info.frames > 0;
+    return info;
+  }
+
+  function probeImage(blob, w) {
+    return new Promise(function (resolve) {
+      var url = URL.createObjectURL(blob), img = new Image(), to = setTimeout(function () { finish("unknown"); }, 6000);
+      function finish(r) { clearTimeout(to); URL.revokeObjectURL(url); resolve(r); }
+      img.onload = function () { finish(img.naturalWidth === w ? "yes" : "no"); };
+      img.onerror = function () { finish("no"); };
+      img.src = url;
+    });
+  }
+
+  async function buildWebpReport(u8, d, expect) {
+    var info = inspectWebp(u8), dur = info.ms / 1000;
+    var shown = await probeImage(new Blob([u8], { type: "image/webp" }), d.w);
+    var checks = [
+      { label: "Dimensions", target: d.w + " × " + d.h + (d.scale > 1 ? " (2× of " + dimsText() + ")" : ""), value: info.w + " × " + info.h, ok: info.w === d.w && info.h === d.h },
+      { label: "Duration", target: (+expect.seconds.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - expect.seconds) <= 0.02 },
+      expect.frames
+        ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
+        : { label: "Frame rate", target: expect.fps + " fps", value: (dur > 0 ? info.frames / dur : 0).toFixed(1) + " fps", ok: dur > 0 && Math.abs(info.frames / dur - expect.fps) < 0.1 },
+      { label: "File size", target: "under 5 MB", value: mb(u8.length) + " MB", ok: u8.length < SPEC.maxBytes },
+      { label: "Loops", target: "forever", value: info.loop === 0 ? "forever" : info.valid ? "no" : "unreadable", ok: info.valid && info.loop === 0 },
+      { label: "Shows here", target: "decodes in this browser", ok: shown !== "no",
+        value: shown === "yes" ? "yes" : shown === "no" ? "no" : "not confirmed — check the preview" }
+    ];
+    var ok = checks.every(function (c) { return c.ok; });
+    var onlySizeFails = !checks[3].ok && checks.every(function (c, i) { return i === 3 || c.ok; });
+    return { checks: checks, ok: ok, onlySizeFails: onlySizeFails };
+  }
+
+  // Slideshow: each photo is one frame held for its full time; crossfades are drawn and encoded frame by frame.
+  async function buildSlideshowWebp(scale, step, prefix) {
+    await ensureLabelFont();
+    var n = slides.length, holdMs = Math.round(parseFloat(secsInput.value) * 1000);
+    var fades = transInput.value === "fade" ? WEBP_FADE_FRAMES : 0;
+    var W = SPEC.w * scale, H = SPEC.h * scale;
+    var cards = [];
+    for (var i = 0; i < n; i++) {
+      var s = slides[i], k = smoothCanvas(W, H), full = null;
+      setProgress(0.15 * i / n, prefix + "preparing photo " + (i + 1) + " of " + n);
+      try { full = await createImageBitmap(s.file); } catch (e) { /* fall back to the preview copy */ }
+      drawPhoto(k.x, full || s.bitmap, s.crop, W, H);
+      if (full) full.close();
+      drawLabel(k.x, s.label, W, H);
+      cards.push(k.c);
+    }
+    var mix = smoothCanvas(W, H), frames = [], total = n * (1 + fades), done = 0;
+    for (var j = 0; j < n; j++) {
+      frames.push({ data: await canvasToWebpFrame(cards[j], step.hold), ms: holdMs - fades * WEBP_FADE_MS });
+      setProgress(0.15 + 0.8 * (++done) / total, prefix + "frame " + done + " of " + total);
+      for (var f = 1; f <= fades; f++) {
+        mix.x.globalAlpha = 1;
+        mix.x.drawImage(cards[j], 0, 0);
+        mix.x.globalAlpha = f / (fades + 1);
+        mix.x.drawImage(cards[(j + 1) % n], 0, 0);
+        mix.x.globalAlpha = 1;
+        frames.push({ data: await canvasToWebpFrame(mix.c, step.fade), ms: WEBP_FADE_MS });
+        setProgress(0.15 + 0.8 * (++done) / total, prefix + "frame " + done + " of " + total);
+      }
+    }
+    return { data: muxWebp(frames, W, H), frames: frames.length, seconds: n * holdMs / 1000, d: { w: W, h: H, scale: scale }, thumb: makeThumb(cards[0]) };
+  }
+
+  // Clip: frames captured by seeking (exact timing, like the GIF), encoded as they're captured.
+  async function buildClipWebp(d, q, prefix) {
+    await ensureLabelFont();
+    var total = SPEC.seconds * WEBP_CLIP_FPS, cv = smoothCanvas(d.w, d.h), r = sampleRect(), label = labelInput.value;
+    var frames = [], thumb = null;
+    for (var i = 0; i < total; i++) {
+      await seekTo(clipStart + i / WEBP_CLIP_FPS);
+      cv.x.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, d.w, d.h);
+      drawLabel(cv.x, label, d.w, d.h);
+      if (i === 0) thumb = makeThumb(cv.c);
+      frames.push({ data: await canvasToWebpFrame(cv.c, q), ms: 1000 / WEBP_CLIP_FPS });
+      setProgress(0.95 * (i + 1) / total, prefix + "frame " + (i + 1) + " of " + total);
+    }
+    // Millisecond durations: spread the rounding so the total is exactly 5.00 s.
+    var acc = 0;
+    frames.forEach(function (f, k) { var t = Math.round((k + 1) * 1000 / WEBP_CLIP_FPS); f.ms = t - acc; acc = t; });
+    return { data: muxWebp(frames, d.w, d.h), seconds: SPEC.seconds, d: d, thumb: thumb };
+  }
+
+  async function runExportWebp() {
+    if (busy || !canExport() || !webpSupported) return;
+    var show = appMode === "show";
+    video.pause();
+    previewing = false;
+    hideResult();
+    setBusy(true);
+    try {
+      // Sharpest and cleanest first: 2x at the highest quality, easing quality before dropping to 1x.
+      var scales = show ? [2, 1] : [mp4Dims().scale].concat(mp4Dims().scale > 1 ? [1] : []);
+      var ladder = show ? SLIDE_WEBP_STEPS : WEBP_QUALITY.map(function (q) { return { hold: q, fade: q }; });
+      var report = null, bytes = 0, misses = [];
+      for (var si = 0; si < scales.length; si++) {
+        for (var qi = 0; qi < ladder.length; qi++) {
+          var scale = scales[si], step = ladder[qi];
+          var what = SPEC.w * scale + " × " + SPEC.h * scale + ", " + stepLabel(step.hold);
+          var prefix = (misses.length ? misses[misses.length - 1] + " — trying " : "WebP · ") + what + " · ";
+          var built = show ? await buildSlideshowWebp(scale, step, prefix) : await buildClipWebp({ w: SPEC.w * scale, h: SPEC.h * scale, scale: scale }, step.hold, prefix);
+          bytes = built.data.length;
+          setProgress(0.98, prefix + "checking");
+          report = await buildWebpReport(built.data, built.d, show ? { seconds: built.seconds, frames: built.frames } : { seconds: built.seconds, fps: WEBP_CLIP_FPS });
+          if (report.ok) {
+            var notes = [];
+            if (scale > 1) notes.push("Made at 2× so it stays sharp on high-density screens; show it at " + dimsText() + " on the page.");
+            if (show && step.hold >= 1) notes.push("Photos are stored losslessly: exactly as resized, with no compression artefacts.");
+            if (misses.length) notes.push(misses[misses.length - 1] + ", so this is " + what + ".");
+            var name = (show ? "loupe-slideshow-" + slides.length + "photos-" : "loupe-clip-") + built.d.w + "x" + built.d.h + "-" + stamp() + ".webp";
+            showSuccess(new Blob([built.data], { type: "image/webp" }), report, name, notes.join(" "), null, {
+              detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · WebP · " + built.d.w + "×" + built.d.h + " · " + fmtSecs(built.seconds),
+              thumb: built.thumb
+            });
+            return;
+          }
+          if (!report.onlySizeFails) { showFailure(report, "This export didn't meet the spec, so no download is offered."); return; }
+          misses.push(what + " came to " + mb(bytes) + " MB");
+          // Each step saves very roughly a third, so skip steps that clearly can't close the gap.
+          var projected = bytes;
+          while (qi + 1 < ladder.length && projected * 0.68 > SPEC.maxBytes * 1.15) { qi++; projected *= 0.68; }
+        }
+      }
+      showFailure(report, "Even at the lowest quality this comes to " + mb(bytes) + " MB, over the 5 MB limit. " +
+        (show ? "Try fewer photos or shorter timings." : "Try a calmer 5 seconds."));
+    } catch (err) {
+      showFailure(null, "Something went wrong while exporting: " + (err && err.message ? err.message : err));
+    } finally {
+      setBusy(false);
+      progressTrack.classList.remove("show");
+      progressFill.style.width = "0%";
+      progressLabel.textContent = "";
+      updateClipUI();
+      renderExport();
+    }
+  }
+
   exportBtn.addEventListener("click", function () {
-    if (effFormat() === "mp4") runExportMp4();
+    if (effFormat() === "webp") runExportWebp();
+    else if (effFormat() === "mp4") runExportMp4();
     else if (appMode === "show") runExportSlideshowGif();
     else runExportGif();
   });

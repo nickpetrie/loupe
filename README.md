@@ -9,9 +9,10 @@ Landscape (440×248) or portrait (248×440), switchable next to the framing cont
 ## Modes
 
 **Video clip.** Pick 5 s, frame it (locked to 440:248), add an optional label, export.
-Pick **GIF** or **MP4** next to the Export button. GIF is the default because the website only takes GIF for now; the last choice is remembered per browser.
+Pick **GIF**, **WebP** or **MP4** next to the Export button. GIF is the default because the website only takes GIF for now; the last choice is remembered per browser.
 
 - **MP4**: H.264, 30 fps, constant quality, so calm footage comes out tiny and busy footage gets the bits it needs. Made at 880×496 (2×) when the framed area has the detail for it, otherwise 440×248. Captured in one real-time playthrough, so export takes about 5 s.
+- **WebP**: animated WebP, which shows anywhere a GIF does in current browsers (an ordinary `<img>`), in full colour. Slideshows store each photo losslessly at 2× when that fits under 5 MB, with lightly compressed crossfade frames, stepping quality down only when needed; clips are 20 fps. Encoded by the browser: Chrome, Edge and Firefox can create WebP, Safari can only show it, so the option is disabled there.
 - **GIF**: 440×248, 20 fps, then 12 fps, then stepped compression until it fits under 5 MB.
 - Shortcuts: Space play/pause, S start the clip at the playhead, P preview.
 
