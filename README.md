@@ -26,6 +26,10 @@ There are no quality or size settings: every export is made as small as it can b
 
 Every export is read back and checked (dimensions, duration, frame rate, under 5 MB, index-first MP4, decodes in this browser) before download is offered.
 
+## Max quality
+
+A **Max quality** checkbox beside the format switch exports each format at its best and ignores the 5 MB limit (the size is still shown, flagged when it's over 5 MB). WebP: every frame lossless, crossfades included. GIF: 2×, 20 fps, best palette, no frame dropping or extra compression (still 256 colours a frame; GIF can't be lossless). MP4: near-lossless H.264 (QP 14; browsers can't encode truly lossless MP4). Remembered per browser.
+
 ## Embedding the MP4
 
 ```html

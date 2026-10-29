@@ -248,6 +248,8 @@
   .seg button { border: none; background: transparent; border-radius: 4px; padding: 7px 14px; font-size: 13px; font-family: inherit; color: var(--text-muted); }
   .seg button[aria-checked="true"] { background: var(--surface-2); color: var(--text); font-weight: 500; }
   .seg button:hover:not(:disabled) { color: var(--text); }
+  .max-opt { font-size: 13px; cursor: pointer; user-select: none; }
+  .max-opt input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin: 0; }
   .export-info { font-size: 12px; color: var(--text-muted); margin: 2px 2px 0; }
   .progress-track {
     flex: 1; height: 6px; border-radius: 999px; background: var(--surface-2);
@@ -565,6 +567,9 @@
         <button type="button" role="radio" id="fmtWebp" aria-checked="false">WebP</button>
         <button type="button" role="radio" id="fmtMp4" aria-checked="false">MP4</button>
       </div>
+      <label class="opt max-opt" title="Best each format can do, with no 5 MB limit: WebP is fully lossless, GIF keeps 2x, 20 fps and the best palette, MP4 is near-lossless. Files can be much larger.">
+        <input type="checkbox" id="maxQualityInput"> <span>Max quality</span>
+      </label>
       <button class="primary" id="exportBtn" type="button">Export GIF</button>
       <div class="progress-track" id="progressTrack"><div class="progress-fill" id="progressFill"></div></div>
     </div>
@@ -668,7 +673,7 @@
   var transportMsg = $("transportMsg"), lengthWarn = $("lengthWarn");
   var frameSection = $("frameSection"), zoomInput = $("zoomInput"), zoomValueEl = $("zoomValue"), resetFrameBtn = $("resetFrameBtn");
   var exportSection = $("exportSection"), exportBtn = $("exportBtn"), exportInfo = $("exportInfo");
-  var fmtGifBtn = $("fmtGif"), fmtWebpBtn = $("fmtWebp"), fmtMp4Btn = $("fmtMp4");
+  var fmtGifBtn = $("fmtGif"), fmtWebpBtn = $("fmtWebp"), fmtMp4Btn = $("fmtMp4"), maxQualityInput = $("maxQualityInput");
   var progressTrack = $("progressTrack"), progressFill = $("progressFill"), progressLabel = $("progressLabel");
   var resultSection = $("resultSection"), resultImg = $("resultImg"), checklistEl = $("checklist");
   var resultNote = $("resultNote"), downloadBtn = $("downloadBtn"), downloadHint = $("downloadHint");
@@ -733,6 +738,24 @@
   fmtMp4Btn.addEventListener("click", function () { setFormat("mp4"); });
   fmtWebpBtn.addEventListener("click", function () { setFormat("webp"); });
 
+  // Max quality: each format at its best, ignoring the 5 MB limit. WebP is fully lossless; GIF keeps 2x, 20 fps
+  // and the best palette (it can't be lossless: 256 colours a frame); MP4 is near-lossless (the browser's
+  // H.264 encoder has no true lossless mode). Remembered per browser.
+  var maxQuality = false;
+  try { maxQuality = localStorage.getItem("loupe.max") === "1"; } catch (e) { /* storage blocked */ }
+  maxQualityInput.checked = maxQuality;
+  maxQualityInput.addEventListener("change", function () {
+    maxQuality = maxQualityInput.checked;
+    try { localStorage.setItem("loupe.max", maxQuality ? "1" : "0"); } catch (e) { /* storage blocked */ }
+    renderExport();
+  });
+  var MP4_MAX_QP = 14;
+  function sizeCheck(bytes) {
+    return maxQuality
+      ? { label: "File size", target: "no limit (max quality)", value: mb(bytes) + " MB" + (bytes >= SPEC.maxBytes ? ", over the usual 5 MB" : ""), ok: true }
+      : { label: "File size", target: "under 5 MB", value: mb(bytes) + " MB", ok: bytes < SPEC.maxBytes };
+  }
+
   function showSeconds() { return slides.length * parseFloat(secsInput.value); }
   function clipReady() { return !!video.videoWidth && !tooShort(); }
   function canExport() { return appMode === "show" ? slides.length >= 2 : clipReady(); }
@@ -741,6 +764,7 @@
     fmtGifBtn.disabled = busy;
     fmtMp4Btn.disabled = busy || !mp4Supported;
     fmtWebpBtn.disabled = busy || !webpSupported;
+    maxQualityInput.disabled = busy;
   }
   function fmtSecs(x) { return (+x.toFixed(1)) + " s"; }
 
@@ -773,7 +797,13 @@
         ? "MP4 · " + size + " · 30 fps · 5 s · under 5 MB · takes about 5 s"
         : f === "webp"
           ? "WebP · " + d.w + " × " + d.h + " · full colour · 20 fps · 5 s · under 5 MB"
-          : "GIF · " + size + " · 20 fps (12 if needed) · 5 s · under 5 MB";
+          : "GIF · " + (maxQuality ? d.w + " × " + d.h : size) + " · 20 fps (12 if needed) · 5 s · under 5 MB";
+    }
+    if (maxQuality) {
+      exportInfo.textContent = exportInfo.textContent
+        .replace(/ · under 5 MB/, "")
+        .replace(/ when it fits, else [0-9]+ × [0-9]+/, "")
+        .replace(/ \(12 if needed\)/, "") + " · max quality, no size limit";
     }
     updateExportState();
   }
@@ -1495,11 +1525,12 @@
   }
 
   var captureThumb = null;
-  async function captureFrames(tier, prefix) {
+  async function captureFrames(tier, prefix, dims) {
     await ensureLabelFont();
+    var W = dims ? dims.w : SPEC.w, H = dims ? dims.h : SPEC.h;
     var cv = document.createElement("canvas");
-    cv.width = SPEC.w;
-    cv.height = SPEC.h;
+    cv.width = W;
+    cv.height = H;
     var ctx = cv.getContext("2d", { willReadFrequently: true });
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
@@ -1507,9 +1538,9 @@
     var out = [];
     for (var i = 0; i < tier.frames; i++) {
       await seekTo(clipStart + i / tier.fps);
-      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, SPEC.w, SPEC.h);
-      drawLabel(ctx, labelInput.value, SPEC.w, SPEC.h);
-      out.push(ctx.getImageData(0, 0, SPEC.w, SPEC.h));
+      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+      drawLabel(ctx, labelInput.value, W, H);
+      out.push(ctx.getImageData(0, 0, W, H));
       if (i === 0) captureThumb = makeThumb(cv);
       setProgress(0.5 * (i + 1) / tier.frames, prefix + "capturing frame " + (i + 1) + " of " + tier.frames);
     }
@@ -1820,7 +1851,7 @@
   async function openMp4Encoder(d, rate, total) {
     var cfg = await pickEncoderConfig(d.w, d.h, rate);
     if (!cfg && rate.qp) { // constant quality isn't offered by every encoder; variable bitrate is
-      rate = { bitrate: mp4Bitrate(d) };
+      rate = { bitrate: mp4Bitrate(d) * (maxQuality ? 5 : 1) };
       cfg = await pickEncoderConfig(d.w, d.h, rate);
     }
     if (!cfg) throw new Error("this browser can't encode H.264. Export a GIF instead, or use a current Chrome, Edge or Safari.");
@@ -2157,7 +2188,7 @@
       { label: "Dimensions", target: dimsTarget, value: info.w + " × " + info.h, ok: info.w === d.w && info.h === d.h },
       { label: "Duration", target: (+seconds.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - seconds) <= 0.02 },
       { label: "Frame rate", target: MP4_FPS + " fps", value: fps.toFixed(1) + " fps", ok: Math.abs(fps - MP4_FPS) < 0.1 },
-      { label: "File size", target: "under 5 MB", value: mb(u8.length) + " MB", ok: u8.length < SPEC.maxBytes },
+      sizeCheck(u8.length),
       { label: "Fast start", target: "index before data", value: info.valid ? info.top.join(" → ") : "unreadable", ok: info.valid && info.top.indexOf("moov") >= 0 && info.top.indexOf("moov") < info.top.indexOf("mdat") },
       { label: "Plays here", target: "decodes in this browser", ok: played !== "no",
         value: played === "yes" ? "yes" : played === "no" ? "no" : "not confirmed — check the preview plays" }
@@ -2180,7 +2211,7 @@
     hideResult();
     setBusy(true);
     try {
-      var d = mp4Dims(), rate = { qp: MP4_QP }, report = null, bytes = 0;
+      var d = mp4Dims(), rate = { qp: maxQuality ? MP4_MAX_QP : MP4_QP }, report = null, bytes = 0;
       // Rarely needed: if a very busy stretch lands over 5 MB, ease quality a step and redo.
       for (var attempt = 0; attempt < 3; attempt++) {
         var prefix = attempt === 0 ? (show ? "Slideshow · " : "Recording · ") : "came to " + mb(bytes) + " MB — easing quality to fit · ";
@@ -2191,9 +2222,10 @@
         if (report.ok) {
           var secs = +enc.seconds.toFixed(1);
           var name = show
-            ? "loupe-slideshow-" + slides.length + "photos-" + d.w + "x" + d.h + "-" + stamp() + ".mp4"
-            : "loupe-clip-" + d.w + "x" + d.h + "-" + stamp() + ".mp4";
+            ? "loupe-slideshow-" + slides.length + "photos-" + d.w + "x" + d.h + (maxQuality ? "-max" : "") + "-" + stamp() + ".mp4"
+            : "loupe-clip-" + d.w + "x" + d.h + (maxQuality ? "-max" : "") + "-" + stamp() + ".mp4";
           var notes = [];
+          if (maxQuality) notes.push("Max quality: near-lossless H.264 with no size limit (browsers can't make truly lossless MP4; for that, use WebP).");
           if (show) notes.push(slides.length + " photos, " + secsInput.value + " s each" + (transInput.value === "fade" ? ", crossfaded" : "") + ".");
           notes.push(d.scale > 1
             ? "Made at 2× so it stays sharp on high-density screens; embed it at " + dimsText() + "."
@@ -2202,7 +2234,7 @@
           showSuccess(
             new Blob([enc.data], { type: "video/mp4" }), report, name, notes.join(" "),
             '<video src="' + name + '" width="' + SPEC.w + '" height="' + SPEC.h + '"\n  autoplay loop muted playsinline preload="auto"></video>',
-            { detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · MP4 · " + d.w + "×" + d.h + " · " + secs + " s", thumb: enc.thumb }
+            { detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · MP4 · " + d.w + "×" + d.h + " · " + secs + " s" + (maxQuality ? " · max quality" : ""), thumb: enc.thumb }
           );
           return;
         }
@@ -2284,7 +2316,7 @@
       expect.frames
         ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
         : { label: "Frame rate", target: "12 fps or higher", value: fps.toFixed(1) + " fps", ok: fps >= SPEC.minFps - 1e-6 },
-      { label: "File size", target: "under 5 MB", value: (bytes / 1e6).toFixed(2) + " MB", ok: bytes < SPEC.maxBytes }
+      sizeCheck(bytes)
     ];
     var ok = checks.every(function (c) { return c.ok; });
     var onlySizeFails = !checks[3].ok && checks[0].ok && checks[1].ok && checks[2].ok;
@@ -2445,7 +2477,8 @@
       // Sharpest first: 2x (880 x 496, shown at 440 x 248, so it stays crisp on high-density screens).
       // The chosen transition outranks the extra sharpness, so 1x crossfades come before 2x cuts.
       var fade = transInput.value === "fade";
-      var tries = fade
+      var tries = maxQuality ? [{ fades: fade, scale: 2 }]
+        : fade
         ? [{ fades: true, scale: 2 }, { fades: true, scale: 1 }, { fades: false, scale: 2 }, { fades: false, scale: 1 }]
         : [{ fades: false, scale: 2 }, { fades: false, scale: 1 }];
       var built = null, report = null, bytes = 0, misses = [];
@@ -2456,7 +2489,7 @@
         var prefix = t === 0 ? "Slideshow GIF · " + what + " · " : misses[misses.length - 1] + " — trying " + what + " · ";
         // A 2x attempt that won't fit wastes most of the export time, so project its size from a few sample
         // frames first and skip it when it's clearly over. A close call still gets the real attempt.
-        if (tr.scale > 1 && built.frames.length > 3) {
+        if (!maxQuality && tr.scale > 1 && built.frames.length > 3) {
           var est = await estimateGifBytes(built, prefix);
           if (est > SPEC.maxBytes * 1.15) { misses.push(what + " would come to about " + mb(est) + " MB"); continue; }
         }
@@ -2468,11 +2501,12 @@
         report = buildReport(info, bytes, { seconds: built.seconds, frames: built.frames.length, scale: tr.scale });
         if (report.ok) {
           var notes = [];
+          if (maxQuality) notes.push("Max quality: 2× with no size steps. GIF is still limited to 256 colours a frame; for a truly lossless file use WebP.");
           if (tr.scale > 1) notes.push("Made at 2× so it stays sharp on high-density screens; show it at " + dimsText() + " on the page.");
           if (misses.length) notes.push(misses.join("; ") + ", so this is " + what + ", the sharpest version under 5 MB.");
           showSuccess(
             new Blob([enc.data.subarray(0, info.end)], { type: "image/gif" }), report,
-            "loupe-slideshow-" + slides.length + "photos-" + built.w + "x" + built.h + "-" + stamp() + ".gif",
+            "loupe-slideshow-" + slides.length + "photos-" + built.w + "x" + built.h + (maxQuality ? "-max" : "") + "-" + stamp() + ".gif",
             notes.join(" "),
             null, { detail: "Slideshow · " + slides.length + " photos · GIF · " + built.w + "×" + built.h + " · " + fmtSecs(built.seconds), thumb: built.thumb }
           );
@@ -2527,6 +2561,22 @@
     var firstMB = null;
     try {
       var frames = null, report = null, bytes = 0;
+
+      if (maxQuality) {
+        // One pass: 20 fps, 2x when the footage has the detail, best palette, no size steps.
+        var mt = TIERS[0], md = mp4Dims(), mprefix = "Max quality GIF · " + md.w + " × " + md.h + " · ";
+        var menc = await encodeFrames(await captureFrames(mt, mprefix, md), mt, mprefix, { quality: 1, width: md.w, height: md.h });
+        var minfo = parseGif(menc.data);
+        if (!minfo) throw new Error("Couldn't read the exported file back to verify it.");
+        var mrep = buildReport(minfo, minfo.end, { scale: md.scale });
+        if (!mrep.ok) { showFailure(mrep, "This export didn't meet the spec, so no download is offered."); return; }
+        showSuccess(new Blob([menc.data.subarray(0, minfo.end)], { type: "image/gif" }), mrep,
+          "loupe-clip-" + md.w + "x" + md.h + "-20fps-max-" + stamp() + ".gif",
+          "Max quality: no frame dropping or extra compression. GIF is still limited to 256 colours a frame; for a truly lossless file use WebP." +
+            (md.scale > 1 ? " Made at 2×; show it at " + dimsText() + " on the page." : ""),
+          null, { detail: "Clip · GIF · " + md.w + "×" + md.h + " · 20 fps · 5 s · max quality", thumb: captureThumb });
+        return;
+      }
 
       // Pass 1 and 2: the standard encoder at 20 fps, then 12 fps.
       for (var ti = 0; ti < TIERS.length; ti++) {
@@ -2616,7 +2666,7 @@
   var SLIDE_WEBP_STEPS = [
     { hold: 1, fade: 0.85 }, { hold: 0.97, fade: 0.85 }, { hold: 0.92, fade: 0.8 }, { hold: 0.85, fade: 0.75 }, { hold: 0.75, fade: 0.6 }
   ];
-  function stepLabel(q) { return q >= 1 ? "lossless photos" : "quality " + Math.round(q * 100); }
+  function stepLabel(q) { return q >= 1 ? (maxQuality ? "lossless" : "lossless photos") : "quality " + Math.round(q * 100); }
   var WEBP_FADE_FRAMES = 8, WEBP_FADE_MS = 50; // crossfades are cheap in WebP, so they can be smooth
   var WEBP_CLIP_FPS = 20;
 
@@ -2708,7 +2758,7 @@
       expect.frames
         ? { label: "Frames", target: expect.frames + " frames", value: info.frames + " frames", ok: info.frames === expect.frames }
         : { label: "Frame rate", target: expect.fps + " fps", value: (dur > 0 ? info.frames / dur : 0).toFixed(1) + " fps", ok: dur > 0 && Math.abs(info.frames / dur - expect.fps) < 0.1 },
-      { label: "File size", target: "under 5 MB", value: mb(u8.length) + " MB", ok: u8.length < SPEC.maxBytes },
+      sizeCheck(u8.length),
       { label: "Loops", target: "forever", value: info.loop === 0 ? "forever" : info.valid ? "no" : "unreadable", ok: info.valid && info.loop === 0 },
       { label: "Shows here", target: "decodes in this browser", ok: shown !== "no",
         value: shown === "yes" ? "yes" : shown === "no" ? "no" : "not confirmed — check the preview" }
@@ -2779,8 +2829,9 @@
     setBusy(true);
     try {
       // Sharpest and cleanest first: 2x at the highest quality, easing quality before dropping to 1x.
-      var scales = show ? [2, 1] : [mp4Dims().scale].concat(mp4Dims().scale > 1 ? [1] : []);
-      var ladder = show ? SLIDE_WEBP_STEPS : WEBP_QUALITY.map(function (q) { return { hold: q, fade: q }; });
+      var scales = maxQuality ? [show ? 2 : mp4Dims().scale] : show ? [2, 1] : [mp4Dims().scale].concat(mp4Dims().scale > 1 ? [1] : []);
+      var ladder = maxQuality ? [{ hold: 1, fade: 1 }]   // every frame lossless, crossfades included
+        : show ? SLIDE_WEBP_STEPS : WEBP_QUALITY.map(function (q) { return { hold: q, fade: q }; });
       var report = null, bytes = 0, misses = [];
       for (var si = 0; si < scales.length; si++) {
         for (var qi = 0; qi < ladder.length; qi++) {
@@ -2794,11 +2845,12 @@
           if (report.ok) {
             var notes = [];
             if (scale > 1) notes.push("Made at 2× so it stays sharp on high-density screens; show it at " + dimsText() + " on the page.");
-            if (show && step.hold >= 1) notes.push("Photos are stored losslessly: exactly as resized, with no compression artefacts.");
+            if (maxQuality) notes.push("Max quality: every frame is lossless, exactly as rendered, with no compression artefacts and no size limit.");
+            else if (show && step.hold >= 1) notes.push("Photos are stored losslessly: exactly as resized, with no compression artefacts.");
             if (misses.length) notes.push(misses[misses.length - 1] + ", so this is " + what + ".");
-            var name = (show ? "loupe-slideshow-" + slides.length + "photos-" : "loupe-clip-") + built.d.w + "x" + built.d.h + "-" + stamp() + ".webp";
+            var name = (show ? "loupe-slideshow-" + slides.length + "photos-" : "loupe-clip-") + built.d.w + "x" + built.d.h + (maxQuality ? "-lossless" : "") + "-" + stamp() + ".webp";
             showSuccess(new Blob([built.data], { type: "image/webp" }), report, name, notes.join(" "), null, {
-              detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · WebP · " + built.d.w + "×" + built.d.h + " · " + fmtSecs(built.seconds),
+              detail: (show ? "Slideshow · " + slides.length + " photos" : "Clip") + " · WebP · " + built.d.w + "×" + built.d.h + " · " + fmtSecs(built.seconds) + (maxQuality ? " · lossless" : ""),
               thumb: built.thumb
             });
             return;
