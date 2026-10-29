@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Loupe</title>
 <!-- Everything runs locally: no requests leave the page except the two Google Fonts hosts. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src blob: data:; media-src blob:; worker-src blob:; connect-src blob:; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src blob: data:; media-src blob:; worker-src blob:; connect-src 'self' blob:; base-uri 'none'; form-action 'none'">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -101,6 +101,13 @@
     display: inline-flex; align-items: center; justify-content: center;
     flex-shrink: 0;
   }
+  .version {
+    border: none; background: none; padding: 0; margin-left: 4px; cursor: default;
+    font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--text-muted); align-self: center;
+  }
+  .version:hover:not(:disabled) { color: var(--text-muted); border: none; }
+  .version.stale { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .version.stale:hover:not(:disabled) { color: var(--accent); }
   .brand-mark::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .tagline { margin: 0; color: var(--text-muted); font-size: 14px; max-width: 40ch; }
   .theme-toggle {
@@ -447,7 +454,10 @@
 <div class="app">
   <header>
     <div>
-      <div class="brand"><span class="brand-mark"></span>LOUPE</div>
+      <div class="brand"><span class="brand-mark"></span>LOUPE
+        <!-- Release version: bump data-version and the name with every release. The page compares it with the live copy. -->
+        <button type="button" class="version mono" id="versionTag" data-version="12" data-name="Max quality" title="Loupe version">v12 · Max quality</button>
+      </div>
       <p class="tagline">Turn 5 seconds of video, or a set of photos, into a looping GIF, WebP or MP4 that already meets the spec.</p>
     </div>
     <button class="theme-toggle mono" id="themeToggle" type="button" title="Toggle light/dark">darkroom mode</button>
@@ -650,6 +660,20 @@
     { fps: 20, frames: 100, delays: makeDelays(100, [50]) },
     { fps: 12, frames: 60,  delays: makeDelays(60, [80, 80, 90]) }
   ];
+
+  /* ---------- version: is this the live copy, or an old one cached by the browser? ---------- */
+  function checkForNewVersion() {
+    var tag = document.getElementById("versionTag"), mine = parseInt(tag.dataset.version, 10);
+    if (!/^https?:$/.test(location.protocol) || !window.fetch) return;
+    fetch(location.pathname, { cache: "no-store" }).then(function (r) { return r.ok ? r.text() : ""; }).then(function (html) {
+      var m = /id="versionTag" data-version="(\d+)" data-name="([^"]*)"/.exec(html);
+      if (!m || parseInt(m[1], 10) <= mine) return;
+      tag.classList.add("stale");
+      tag.textContent = "v" + mine + " · v" + m[1] + " available, tap to reload";
+      tag.title = "A newer version (v" + m[1] + " · " + m[2] + ") is live. Reload to get it.";
+      tag.addEventListener("click", function () { location.reload(); });
+    }).catch(function () { /* offline or blocked: keep showing this copy's version */ });
+  }
 
   /* ---------- theme toggle ---------- */
   var themeBtn = document.getElementById("themeToggle");
@@ -3026,6 +3050,7 @@
   renderRecent();
 
   renderExport();
+  checkForNewVersion();
   // WebCodecs can exist without an H.264 encoder (some Linux builds) — find out now, not at export time.
   if (mp4Supported) {
     pickEncoderConfig(880, 496, { bitrate: 1000000 }).then(function (cfg) {

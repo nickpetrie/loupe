@@ -40,6 +40,10 @@ A **Max quality** checkbox beside the format switch exports each format at its b
 
 MP4 needs an H.264 WebCodecs encoder: current Chrome, Edge, Safari. GIF works everywhere, for clips and slideshows.
 
+## Version
+
+The small tag beside the name (for example "v12 · Max quality") is the release number and the name of its headline change. It lives in one place, the `data-version` and `data-name` attributes on `#versionTag` in `index.html`: bump both with every release. On load the page fetches its live copy without the cache and, if that's newer, the tag turns into "v12 · v13 available, tap to reload".
+
 ## Privacy and security
 
 - No uploads, no accounts, no analytics. The page's Content-Security-Policy blocks every network request except Google Fonts.
