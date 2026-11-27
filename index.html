@@ -117,8 +117,8 @@
     font-size: 11px; font-weight: 400; letter-spacing: 0.04em; color: var(--text-muted);
   }
   .version:hover:not(:disabled) { color: var(--text-muted); border: none; }
-  .version.stale { color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-  .version.stale:hover:not(:disabled) { color: var(--accent); }
+  .version.stale { color: var(--accent-strong); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .version.stale:hover:not(:disabled) { color: var(--accent-strong); }
   .tagline { margin: 10px 0 0; color: var(--text-muted); font-size: 17px; font-weight: 300; max-width: 52ch; line-height: 1.45; }
   .theme-toggle {
     border: 1px solid var(--border); background: var(--surface); color: var(--text-muted);
@@ -702,13 +702,15 @@
 
   /* ---------- theme toggle ---------- */
   var themeBtn = document.getElementById("themeToggle");
-  function applyThemeLabel() {
+  // Dark is either chosen here (data-theme) or, with no choice made, the system setting.
+  function isDark() {
     var explicit = document.documentElement.getAttribute("data-theme");
-    themeBtn.textContent = explicit === "dark" ? "Light mode" : "Dark mode";
+    if (explicit) return explicit === "dark";
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
   }
+  function applyThemeLabel() { themeBtn.textContent = isDark() ? "Light mode" : "Dark mode"; }
   themeBtn.addEventListener("click", function () {
-    var cur = document.documentElement.getAttribute("data-theme");
-    document.documentElement.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", isDark() ? "light" : "dark");
     applyThemeLabel();
   });
   applyThemeLabel();
@@ -887,7 +889,7 @@
     updateExportState();
   }
   secsInput.addEventListener("change", renderExport);
-  lenInput.addEventListener("change", function () { updateClipUI(); renderExport(); });
+  lenInput.addEventListener("change", function () { if (busy) return; updateClipUI(); renderExport(); });
 
   /* ---------- orientation ---------- */
   var orientBtns = document.querySelectorAll(".orient-seg button");
@@ -1575,7 +1577,7 @@
   function setBusy(b) {
     busy = b;
     [playBtn, setStartBtn, previewBtn, changeBtn, resetFrameBtn, zoomInput, scrub,
-     modeClipBtn, modeShowBtn, labelInput, labelPosInput, showPosInput, secsInput, transInput].forEach(function (el) { el.disabled = b; });
+     modeClipBtn, modeShowBtn, labelInput, labelPosInput, showPosInput, secsInput, transInput, lenInput].forEach(function (el) { el.disabled = b; });
     slideList.inert = b;
     photoDrop.inert = b;
     Array.prototype.forEach.call(orientBtns, function (el) { el.disabled = b; });
@@ -1908,9 +1910,11 @@
 
   // rate is { qp } for constant quality or { bitrate } for variable bitrate.
   async function pickEncoderConfig(w, h, rate) {
-    for (var i = 0; i < AVC_CODECS.length; i++) {
+    // Max quality (QP 14) can pass level 3.1's bitrate ceiling, so it declares level 4.0 first.
+    var codecs = maxQuality ? AVC_CODECS.slice(3).concat(AVC_CODECS.slice(0, 3)) : AVC_CODECS;
+    for (var i = 0; i < codecs.length; i++) {
       var cfg = {
-        codec: AVC_CODECS[i], width: w, height: h, framerate: MP4_FPS, latencyMode: "quality",
+        codec: codecs[i], width: w, height: h, framerate: MP4_FPS, latencyMode: "quality",
         avc: { format: "avc" } // length-prefixed NALs + avcC description, which is what MP4 wants
       };
       if (rate.qp) cfg.bitrateMode = "quantizer";
@@ -1981,7 +1985,7 @@
   // (nearest source frame), so a 5 s clip is exactly 150 frames / 5.00 s whatever the source rate.
   async function captureClipMp4(d, rate, prefix) {
     await ensureLabelFont();
-    var secs = clipSecs(), total = Math.round(secs * MP4_FPS);
+    var secs = clipSecs(), total = Math.round(secs * MP4_FPS), start = clipStart; // fixed for the whole capture
     var enc = await openMp4Encoder(d, rate, total);
 
     var cv = document.createElement("canvas");
@@ -2002,7 +2006,7 @@
     }
 
     try {
-      await seekTo(clipStart);
+      await seekTo(start);
       draw();
       thumb = makeThumb(cv);
 
@@ -2027,7 +2031,7 @@
           function onFrame(now, meta) {
             if (finished) return;
             try {
-              var t = meta.mediaTime - clipStart;
+              var t = meta.mediaTime - start;
               while (enc.count() < total && enc.count() / MP4_FPS < t - half) emit(); // slots before this frame keep the previous one
               if (enc.count() >= total || t >= secs) return stop();
               draw();
@@ -2045,7 +2049,7 @@
         // Fallback: seek frame by frame (slower, but works everywhere WebCodecs does).
         emit();
         while (enc.count() < total) {
-          await seekTo(clipStart + enc.count() / MP4_FPS);
+          await seekTo(start + enc.count() / MP4_FPS);
           draw();
           emit();
         }
@@ -2484,6 +2488,8 @@
     lastFilename = filename;
     resultSection.classList.toggle("result-portrait", SPEC.h > SPEC.w);
     var isVideo = blob.type === "video/mp4";
+    var kind = { "video/mp4": "MP4", "image/webp": "WebP", "image/gif": "GIF" }[blob.type] || "export";
+    if (isVideo) resultVideo.setAttribute("aria-label", "Exported " + kind + " preview"); else resultImg.alt = "Exported " + kind + " preview";
     resultImg.classList.toggle("hidden", isVideo);
     resultVideo.classList.toggle("hidden", !isVideo);
     if (isVideo) { resultImg.removeAttribute("src"); resultVideo.src = lastResultURL; resultVideo.play().catch(function () {}); }
