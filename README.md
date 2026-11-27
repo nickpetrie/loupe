@@ -19,6 +19,7 @@ Landscape (440×248) or portrait (248×440), switchable next to the framing cont
 Pick **MP4**, **GIF** or **WebP** next to the Export button. MP4 is the default; the last choice is remembered per browser.
 
 - **MP4**: H.264 High profile (level 3.1), 30 fps, constant quality (QP 23), so calm footage comes out small and busy footage gets the bits it needs. Made at 880×496 (2×) when the framed area has the detail for it, otherwise 440×248. One keyframe at the start (loops only ever jump back there), fast-start index, no audio track, tagged BT.709 (`colr`) so Safari and Windows don't shift the colours. If a busy stretch lands over 2 MB it's encoded again with the quality eased by what the overshoot needs; past QP 32 it drops to 1×, which needs about half the bytes for the same look. Captured in one real-time playthrough, so export takes about as long as the clip (longer if it has to be redone).
+- **The source, checked first**: before capturing, Loupe plays a moment of the clip to read its frame rate and keeps it (24, 25 or 30 fps; 50 and 60 become 25 and 30), because turning 25 fps into 30 repeats every fifth frame and motion judders. It also checks for interlacing (broadcast 1080i/576i footage, where each frame holds two moments on alternate lines and anything moving gets comb-tooth edges). It reads the decoded brightness plane and looks for a one-line zig-zag that isn't there two lines apart. Interlaced sources are drawn from one field per frame: no combs, no ghosting, and a 1080i field still has more lines than the 496 the output needs. GIF and WebP get the same deinterlacing.
 - **WebP**: animated WebP, which shows anywhere a GIF does in current browsers (an ordinary `<img>`), in full colour. Slideshows store each photo losslessly at 2× when that fits under 5 MB, with lightly compressed crossfade frames, stepping quality down only when needed; clips are 20 fps. Encoded by the browser: Chrome, Edge and Firefox can create WebP, Safari can only show it, so the option is disabled there.
 - **GIF**: 440×248, 20 fps, then 12 fps, then stepped compression until it fits under 5 MB.
 - Shortcuts: Space play/pause, S start the clip at the playhead, P preview.
@@ -53,7 +54,7 @@ MP4 needs an H.264 WebCodecs encoder: current Chrome, Edge, Safari. GIF works ev
 
 ## Version
 
-The small tag beside the name (for example "v13 · MP4 slabs") is the release number and the name of its headline change. It lives in one place, the `data-version` and `data-name` attributes on `#versionTag` in `index.html`: bump both with every release. On load the page fetches its live copy without the cache and, if that's newer, the tag turns into "v13 · v14 available, tap to reload".
+The small tag beside the name (for example "v14 · Smooth motion") is the release number and the name of its headline change. It lives in one place, the `data-version` and `data-name` attributes on `#versionTag` in `index.html`: bump both with every release. On load the page fetches its live copy without the cache and, if that's newer, the tag turns into "v14 · v15 available, tap to reload".
 
 ## Privacy and security
 

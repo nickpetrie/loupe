@@ -470,7 +470,7 @@
       <img class="logo logo-mark" src="assets/the-ipaper-i-mark.png" alt="The i Paper">
       <div class="brand"><h1>Loupe</h1>
         <!-- Release version: bump data-version and the name with every release. The page compares it with the live copy. -->
-        <button type="button" class="version mono" id="versionTag" data-version="13" data-name="MP4 slabs" title="Loupe version">v13 · MP4 slabs</button>
+        <button type="button" class="version mono" id="versionTag" data-version="14" data-name="Smooth motion" title="Loupe version">v14 · Smooth motion</button>
       </div>
       <p class="tagline">Turn a few seconds of video, or a set of photos, into a looping MP4 for homepage and category slabs, already within 10 s and 2 MB. GIF and WebP too.</p>
     </div>
@@ -768,9 +768,9 @@
   function mp4Dims() {
     var k = 2;
     if (appMode === "clip" && video.videoWidth && sampleRect().sw < SPEC.w * 1.5) k = 1;
-    return { w: SPEC.w * k, h: SPEC.h * k, scale: k };
+    return { w: SPEC.w * k, h: SPEC.h * k, scale: k, fps: MP4_FPS };
   }
-  function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_FALLBACK_BPP * d.w * d.h * MP4_FPS)); }
+  function mp4Bitrate(d) { return Math.max(150000, Math.round(MP4_FALLBACK_BPP * d.w * d.h * (d.fps || MP4_FPS))); }
 
   // MP4 is the default now the site takes video in slabs; GIF and WebP stay as options. Each person's
   // choice is remembered under a new key, so everyone starts on MP4 once rather than keeping the old GIF default.
@@ -875,7 +875,7 @@
           slides.length + " photos, " + fmtSecs(showSeconds()) + " loop · under " + limitText();
     } else {
       exportInfo.textContent = f === "mp4"
-        ? "MP4 · " + size + " · 30 fps · " + fmtSecs(clipSecs()) + " · under 2 MB · takes about " + fmtSecs(clipSecs())
+        ? "MP4 · " + size + " · source frame rate · " + fmtSecs(clipSecs()) + " · under 2 MB · takes about " + fmtSecs(clipSecs() + 1)
         : f === "webp"
           ? "WebP · " + d.w + " × " + d.h + " · full colour · 20 fps · 5 s · under 5 MB"
           : "GIF · " + (maxQuality ? d.w + " × " + d.h : size) + " · 20 fps (12 if needed) · 5 s · under 5 MB";
@@ -1605,6 +1605,136 @@
     return { sx: sx, sy: sy, sw: sw, sh: sh };
   }
 
+  /* ---------- the source: frame rate and interlacing ---------- */
+  // Broadcast footage is often interlaced (1080i/576i): each frame holds two moments, on alternate lines.
+  // Browsers hand those frames over as they are, so anything moving gets comb-tooth edges, made worse by
+  // downscaling. When the source is interlaced, one field of each frame is used instead (see drawSource).
+  // The frame rate is kept too (24, 25 or 30): turning 25 fps into 30 repeats every fifth frame, a visible judder.
+  var source = { fps: 30, interlaced: false };
+
+  function lumaRows(c, w, h) {
+    var d = c.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, w, h).data, Y = new Uint8Array(w * h);
+    for (var i = 0, j = 0; j < Y.length; i += 4, j++) Y[j] = (d[i] + 2 * d[i + 1] + d[i + 2]) >> 2;
+    return Y;
+  }
+  // The decoded luma plane itself, when the browser can hand it over: brightness only, untouched by colour
+  // conversion (in RGB, colour sampled across both fields shows up as a pattern of its own). Centre band,
+  // native resolution. Null when the frame isn't in a readable YUV format; the caller then uses RGB.
+  async function lumaPlane() {
+    if (typeof VideoFrame !== "function") return null;
+    var vf = null;
+    try {
+      vf = new VideoFrame(video);
+      if (!/^(I420|I420A|I422|I444|NV12)$/.test(vf.format || "")) return null;
+      var vr = vf.visibleRect, w = Math.min(vr.width, 960) & ~1, h = Math.min(vr.height, 360) & ~1;
+      var rect = { x: (vr.x + Math.floor((vr.width - w) / 4) * 2), y: (vr.y + Math.floor((vr.height - h) / 4) * 2), width: w, height: h };
+      var buf = new Uint8Array(vf.allocationSize({ rect: rect }));
+      var layout = await vf.copyTo(buf, { rect: rect });
+      var Y = new Uint8Array(w * h), off = layout[0].offset, stride = layout[0].stride;
+      for (var y = 0; y < h; y++) Y.set(buf.subarray(off + y * stride, off + y * stride + w), y * w);
+      return { Y: Y, w: w, h: h };
+    } catch (e) {
+      return null;
+    } finally {
+      if (vf) vf.close();
+    }
+  }
+
+  // Comb test ("zipper"): a pixel that differs sharply from the lines just above and below, in the same
+  // direction, while those two agree with each other. Interlaced motion is full of them; the same test
+  // two lines away (inside one field) finds almost none. In progressive video both tests score alike.
+  function combScore(Y, w, h) {
+    var z1 = 0, z2 = 0, n = 0;
+    for (var y = 2; y < h - 2; y++) {
+      for (var x = 0; x < w; x += 2) {
+        var i = y * w + x, b = Y[i], a1 = Y[i - w], c1 = Y[i + w], a2 = Y[i - 2 * w], c2 = Y[i + 2 * w];
+        if ((b - a1) * (b - c1) > 400 && Math.abs(a1 - c1) < 20) z1++;
+        if ((b - a2) * (b - c2) > 400 && Math.abs(a2 - c2) < 20) z2++;
+        n++;
+      }
+    }
+    return { combed: z1 / n, field: z2 / n };
+  }
+  async function detectInterlace(start, secs) {
+    var vw = video.videoWidth, vh = video.videoHeight;
+    if (!vw || !vh) return false;
+    // Native resolution, centre band of the picture: combs are a 1-line pattern, so no scaling here.
+    var bw = Math.min(vw, 960), bh = Math.min(vh, 360), bx = Math.floor((vw - bw) / 2), by = Math.floor((vh - bh) / 4) * 2;
+    var c = document.createElement("canvas");
+    c.width = bw; c.height = bh;
+    var x = c.getContext("2d", { willReadFrequently: true });
+    var votes = 0, looked = 0;
+    for (var k = 0; k < 5; k++) {
+      await seekTo(start + secs * (k + 0.5) / 5);
+      var plane = await lumaPlane(), sc;
+      if (plane) sc = combScore(plane.Y, plane.w, plane.h);
+      else { x.drawImage(video, bx, by, bw, bh, 0, 0, bw, bh); sc = combScore(lumaRows(c, bw, bh), bw, bh); }
+      if (sc.combed < 0.001 && sc.field < 0.001) continue; // nothing moving or detailed enough to tell
+      looked++;
+      if (sc.combed > 0.002 && sc.combed > 2.5 * sc.field + 0.0005) votes++;
+    }
+    return looked > 0 && votes * 2 > looked;
+  }
+  // Plays a moment of the video and reads the gaps between presented frames.
+  function detectFps(start) {
+    if (typeof video.requestVideoFrameCallback !== "function") return Promise.resolve(30);
+    return seekTo(start).then(function () {
+      return new Promise(function (resolve) {
+        var times = [], done = false, to = null;
+        function finish() {
+          if (done) return;
+          done = true;
+          clearTimeout(to);
+          video.pause();
+          var gaps = [];
+          for (var i = 1; i < times.length; i++) { var g = times[i] - times[i - 1]; if (g > 0.005 && g < 0.2) gaps.push(g); }
+          gaps.sort(function (a, b) { return a - b; });
+          var f = gaps.length >= 4 ? 1 / gaps[Math.floor(gaps.length / 2)] : 30;
+          resolve(Math.abs(f - 24) < 0.8 ? 24 : Math.abs(f - 25) < 0.8 || Math.abs(f - 50) < 2 ? 25 : 30);
+        }
+        function onFrame(now, meta) {
+          if (done) return;
+          times.push(meta.mediaTime);
+          if (times.length >= 14) return finish();
+          video.requestVideoFrameCallback(onFrame);
+        }
+        to = setTimeout(finish, 1500);
+        video.requestVideoFrameCallback(onFrame);
+        video.play().catch(function () { finish(); });
+      });
+    });
+  }
+  async function probeSource(start, secs, prefix) {
+    setProgress(0.01, prefix + "checking the source");
+    var fps = await detectFps(start);
+    var interlaced = await detectInterlace(start, secs);
+    source = { fps: fps, interlaced: interlaced };
+    return source;
+  }
+
+  // Draws the framed part of the current video frame, deinterlacing first when the source needs it.
+  // Deinterlacing keeps one field (every other line, one moment in time): no combs and no ghosting, and a
+  // 1080i field still has 540 lines, more than the 496 the output needs. A half-height draw that starts half
+  // a line down lands each bilinear sample exactly on an odd line, so nothing is blended between fields.
+  var fieldCanvas = null;
+  function drawSource(ctx, r, W, H) {
+    if (!source.interlaced) { ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H); return; }
+    var vh = video.videoHeight;
+    var sy = Math.max(0, Math.floor(r.sy / 2) * 2);
+    var sh = Math.min(vh - sy - 2, Math.ceil((r.sh + (r.sy - sy)) / 2) * 2);
+    var fw = Math.max(1, Math.round(r.sw)), fh = Math.max(1, sh / 2);
+    if (!fieldCanvas) fieldCanvas = document.createElement("canvas");
+    if (fieldCanvas.width !== fw || fieldCanvas.height !== fh) { fieldCanvas.width = fw; fieldCanvas.height = fh; }
+    var fx = fieldCanvas.getContext("2d", { alpha: false });
+    fx.imageSmoothingEnabled = true;
+    fx.imageSmoothingQuality = "low"; // plain bilinear: samples land on line centres
+    fx.drawImage(video, r.sx, sy + 0.5, r.sw, sh, 0, 0, fw, fh);
+    // Field row k is source line sy + 2k + 1; map the exact framing onto it.
+    var top = Math.max(0, (r.sy - sy - 1) / 2), tall = Math.min(fh - top, r.sh / 2);
+    ctx.drawImage(fieldCanvas, 0, top, fw, tall, 0, 0, W, H);
+  }
+
+
   var captureThumb = null;
   async function captureFrames(tier, prefix, dims) {
     await ensureLabelFont();
@@ -1619,7 +1749,7 @@
     var out = [];
     for (var i = 0; i < tier.frames; i++) {
       await seekTo(clipStart + i / tier.fps);
-      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, W, H);
+      drawSource(ctx, r, W, H);
       drawLabel(ctx, labelInput.value, W, H);
       out.push(ctx.getImageData(0, 0, W, H));
       if (i === 0) captureThumb = makeThumb(cv);
@@ -1909,12 +2039,12 @@
   var AVC_CODECS = ["avc1.64001f", "avc1.4d001f", "avc1.42e01f", "avc1.640028", "avc1.4d0028", "avc1.42e028"];
 
   // rate is { qp } for constant quality or { bitrate } for variable bitrate.
-  async function pickEncoderConfig(w, h, rate) {
+  async function pickEncoderConfig(w, h, rate, fps) {
     // Max quality (QP 14) can pass level 3.1's bitrate ceiling, so it declares level 4.0 first.
     var codecs = maxQuality ? AVC_CODECS.slice(3).concat(AVC_CODECS.slice(0, 3)) : AVC_CODECS;
     for (var i = 0; i < codecs.length; i++) {
       var cfg = {
-        codec: codecs[i], width: w, height: h, framerate: MP4_FPS, latencyMode: "quality",
+        codec: codecs[i], width: w, height: h, framerate: fps, latencyMode: "quality",
         avc: { format: "avc" } // length-prefixed NALs + avcC description, which is what MP4 wants
       };
       if (rate.qp) cfg.bitrateMode = "quantizer";
@@ -1933,10 +2063,11 @@
 
   // One H.264 encode session: feed it canvases in order, then finish() returns the muxed MP4 bytes.
   async function openMp4Encoder(d, rate, total) {
-    var cfg = await pickEncoderConfig(d.w, d.h, rate);
+    var fps = d.fps || MP4_FPS;
+    var cfg = await pickEncoderConfig(d.w, d.h, rate, fps);
     if (!cfg && rate.qp) { // constant quality isn't offered by every encoder; variable bitrate is
       rate = { bitrate: mp4Bitrate(d) * (maxQuality ? 5 : 1) };
-      cfg = await pickEncoderConfig(d.w, d.h, rate);
+      cfg = await pickEncoderConfig(d.w, d.h, rate, fps);
     }
     if (!cfg) throw new Error("this browser can't encode H.264. Export a GIF instead, or use a current Chrome, Edge or Safari.");
     var samples = [], avcC = null, colour = null, encErr = null, next = 0;
@@ -1959,7 +2090,7 @@
       count: function () { return next; },
       add: function (source, keyFrame) {
         if (encErr) throw encErr;
-        var vf = new VideoFrame(source, { timestamp: Math.round(next * 1e6 / MP4_FPS), duration: Math.round(1e6 / MP4_FPS) });
+        var vf = new VideoFrame(source, { timestamp: Math.round(next * 1e6 / fps), duration: Math.round(1e6 / fps) });
         var opts = { keyFrame: next === 0 || !!keyFrame };
         if (rate.qp) opts.avc = { quantizer: rate.qp };
         encoder.encode(vf, opts);
@@ -1975,7 +2106,7 @@
         encoder.close();
         if (encErr) throw encErr;
         if (!avcC || samples.length !== total) throw new Error("the encoder returned " + samples.length + " of " + total + " frames.");
-        return muxMp4(d.w, d.h, MP4_FPS, samples, avcC, colour);
+        return muxMp4(d.w, d.h, fps, samples, avcC, colour);
       },
       close: function () { if (encoder.state !== "closed") encoder.close(); }
     };
@@ -1985,7 +2116,8 @@
   // (nearest source frame), so a 5 s clip is exactly 150 frames / 5.00 s whatever the source rate.
   async function captureClipMp4(d, rate, prefix) {
     await ensureLabelFont();
-    var secs = clipSecs(), total = Math.round(secs * MP4_FPS), start = clipStart; // fixed for the whole capture
+    var fps = d.fps, start = clipStart; // fixed for the whole capture
+    var total = Math.floor(clipSecs() * fps + 1e-6), secs = total / fps; // whole frames, never past the chosen length
     var enc = await openMp4Encoder(d, rate, total);
 
     var cv = document.createElement("canvas");
@@ -1997,7 +2129,7 @@
     var r = sampleRect(), label = labelInput.value, thumb = null;
 
     function draw() {
-      ctx.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, d.w, d.h);
+      drawSource(ctx, r, d.w, d.h);
       drawLabel(ctx, label, d.w, d.h);
     }
     function emit() {
@@ -2013,7 +2145,7 @@
       if (typeof video.requestVideoFrameCallback === "function") {
         // Real-time path: play the clip once and grab each presented frame.
         await new Promise(function (resolve, reject) {
-          var half = 0.5 / MP4_FPS, finished = false, stall = null;
+          var half = 0.5 / fps, finished = false, stall = null;
           function armStall() {
             clearTimeout(stall);
             stall = setTimeout(function () { stop(new Error("capture stalled — keep this tab in front while exporting")); }, 3000);
@@ -2032,7 +2164,7 @@
             if (finished) return;
             try {
               var t = meta.mediaTime - start;
-              while (enc.count() < total && enc.count() / MP4_FPS < t - half) emit(); // slots before this frame keep the previous one
+              while (enc.count() < total && enc.count() / fps < t - half) emit(); // slots before this frame keep the previous one
               if (enc.count() >= total || t >= secs) return stop();
               draw();
               armStall();
@@ -2049,14 +2181,14 @@
         // Fallback: seek frame by frame (slower, but works everywhere WebCodecs does).
         emit();
         while (enc.count() < total) {
-          await seekTo(start + enc.count() / MP4_FPS);
+          await seekTo(start + enc.count() / fps);
           draw();
           emit();
         }
       }
 
       setProgress(0.97, prefix + "finishing");
-      return { data: await enc.finish(), codec: enc.codec, rate: enc.rate, thumb: thumb, seconds: total / MP4_FPS };
+      return { data: await enc.finish(), codec: enc.codec, rate: enc.rate, thumb: thumb, seconds: total / fps };
     } finally {
       enc.close();
     }
@@ -2287,7 +2419,7 @@
     var checks = [
       { label: "Dimensions", target: dimsTarget, value: info.w + " × " + info.h, ok: info.w === d.w && info.h === d.h },
       { label: "Duration", target: (+seconds.toFixed(2)) + " s", value: dur.toFixed(2) + " s", ok: Math.abs(dur - seconds) <= 0.02 },
-      { label: "Frame rate", target: MP4_FPS + " fps", value: fps.toFixed(1) + " fps", ok: Math.abs(fps - MP4_FPS) < 0.1 },
+      { label: "Frame rate", target: (d.fps || MP4_FPS) + " fps" + (d.fps && d.fps !== MP4_FPS ? " (the source's)" : ""), value: fps.toFixed(1) + " fps", ok: Math.abs(fps - (d.fps || MP4_FPS)) < 0.1 },
       sizeCheck(u8.length),
       { label: "Fast start", target: "index before data", value: info.valid ? info.top.join(" → ") : "unreadable", ok: info.valid && info.top.indexOf("moov") >= 0 && info.top.indexOf("moov") < info.top.indexOf("mdat") },
       { label: "Plays here", target: "decodes in this browser", ok: played !== "no",
@@ -2312,6 +2444,7 @@
     setBusy(true);
     try {
       var d = mp4Dims(), rate = { qp: maxQuality ? MP4_MAX_QP : MP4_QP }, report = null, bytes = 0, eased = false, dropped = false;
+      if (!show) d.fps = (await probeSource(clipStart, clipSecs(), "")).fps;
       // Constant quality first; most loops land well under 2 MB. If one doesn't, encode again once with QP
       // raised by what the overshoot needs (+6 QP roughly halves the size) and a little to spare, then in
       // steps of 3. Past QP 32 at 2× it drops to 1×, which needs about half the bytes for the same look.
@@ -2335,6 +2468,8 @@
               ? "Made at " + dimsText() + " so this busy stretch fits under 2 MB without looking blocky."
               : "Made at " + dimsText() + ": the framed area doesn't have the detail for 2×, so extra pixels would only add size.");
           if (eased && !dropped) notes.push("Quality was eased slightly to fit under 2 MB.");
+          if (!show && source.interlaced) notes.push("The source is interlaced (broadcast video), so one field of each frame was used: no comb lines on movement.");
+          if (!show && d.fps !== MP4_FPS) notes.push("Kept the source's " + d.fps + " fps, so motion stays even.");
           notes.push("Upload it to the media library and choose it under Featured video. The featured image is still needed: it's shown instead of the video for reduced motion, data saver and slow connections, and in feeds, Apple News, MSN, social and the app.");
           showSuccess(
             new Blob([enc.data], { type: "video/mp4" }), report, name, notes.join(" "),
@@ -2351,11 +2486,11 @@
         if (enc.rate.qp) {
           var need = Math.ceil(6 * Math.log2(bytes / (MP4_MAX_BYTES * 0.92)));
           var qp = enc.rate.qp + Math.max(attempt === 0 ? need : 3, 2);
-          if (qp > 32 && d.scale > 1) { d = { w: SPEC.w, h: SPEC.h, scale: 1 }; dropped = true; qp = Math.max(MP4_QP, qp - 9); } // a quarter of the pixels: roughly 9 QP of headroom
+          if (qp > 32 && d.scale > 1) { d = { w: SPEC.w, h: SPEC.h, scale: 1, fps: d.fps }; dropped = true; qp = Math.max(MP4_QP, qp - 9); } // a quarter of the pixels: roughly 9 QP of headroom
           rate = { qp: Math.min(qp, 40) };
         } else {
           rate = { bitrate: Math.floor(enc.rate.bitrate * (MP4_MAX_BYTES * 0.88) / bytes) };
-          if (attempt >= 2 && d.scale > 1) { d = { w: SPEC.w, h: SPEC.h, scale: 1 }; dropped = true; }
+          if (attempt >= 2 && d.scale > 1) { d = { w: SPEC.w, h: SPEC.h, scale: 1, fps: d.fps }; dropped = true; }
         }
       }
       showFailure(report, "Even with quality eased this comes to " + mb(bytes) + " MB, over the 2 MB limit. " +
@@ -2675,6 +2810,7 @@
     var firstMB = null;
     try {
       var frames = null, report = null, bytes = 0;
+      await probeSource(clipStart, clipSecs(), ""); // only interlacing matters here: GIF keeps its own frame rates
 
       if (maxQuality) {
         // One pass: 20 fps, 2x when the footage has the detail, best palette, no size steps.
@@ -2922,7 +3058,7 @@
     var frames = [], thumb = null;
     for (var i = 0; i < total; i++) {
       await seekTo(clipStart + i / WEBP_CLIP_FPS);
-      cv.x.drawImage(video, r.sx, r.sy, r.sw, r.sh, 0, 0, d.w, d.h);
+      drawSource(cv.x, r, d.w, d.h);
       drawLabel(cv.x, label, d.w, d.h);
       if (i === 0) thumb = makeThumb(cv.c);
       frames.push({ data: await canvasToWebpFrame(cv.c, q), ms: 1000 / WEBP_CLIP_FPS });
@@ -2942,6 +3078,7 @@
     hideResult();
     setBusy(true);
     try {
+      if (!show) await probeSource(clipStart, clipSecs(), "");
       // Sharpest and cleanest first: 2x at the highest quality, easing quality before dropping to 1x.
       var scales = maxQuality ? [show ? 2 : mp4Dims().scale] : show ? [2, 1] : [mp4Dims().scale].concat(mp4Dims().scale > 1 ? [1] : []);
       var ladder = maxQuality ? [{ hold: 1, fade: 1 }]   // every frame lossless, crossfades included
